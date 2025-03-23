@@ -14,10 +14,12 @@ D CREATE TABLE occurrence AS
   FROM parquet_scan('occurrence_SR_2025_02.parquet');
 D .quit
 ```
+
 ## Create ontop mapping in obda format
 ```vi occurrence-mapping.obda
 vi duckdb.properties
-vi occurrence.ttl```
+vi occurrence.ttl
+```
 
 
 ## Run onto
