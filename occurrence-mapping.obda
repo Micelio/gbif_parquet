@@ -1,0 +1,11 @@
+[PrefixDeclaration]
+ex: http://example.org/occurrence/
+dwc: http://rs.tdwg.org/dwc/terms/
+wdt: http://www.wikidata.org/prop/direct/
+geo: http://www.opengis.net/ont/geosparql#
+
+[MappingDeclaration] @collection [[
+mappingId   mapping1
+target      ex:Occurrence_{gbifid} a dwc:Occurrence ; wdt:P846 "{gbifid}"; dwc:taxonRank "{taxonrank}"; dwc:institutionCode "{institutioncode}"; dwc:license "{license}"; dwc:verbatimScienticName "{verbatimscientificname}"; dwc:verbatimScientificNameAuthorship "{verbatimscientificnameauthorship}";  wdt:P625 "Point({decimalLongitude} {decimalLatitude})"^^geo:wktLiteral .
+source     SELECT gbifid, species, genus, family, "order", countrycode, decimallatitude, decimallongitude, taxonrank, institutioncode, verbatimscientificnameauthorship, verbatimscientificname, license  FROM 'occurrence_SR_2025_02.parquet'
+]]
