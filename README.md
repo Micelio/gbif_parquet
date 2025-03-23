@@ -15,11 +15,10 @@ D CREATE TABLE occurrence AS
 D .quit
 ```
 ## Create ontop mapping in obda format
-`vi occurrence-mapping.obda`
-`vi duckdb.properties`
-`vi occurrence.ttl`
+```vi occurrence-mapping.obda
+vi duckdb.properties
+vi occurrence.ttl```
 
-## create duck
 
 ## Run onto
 ```gbif_parquet % ./ontop endpoint \
