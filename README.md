@@ -3,7 +3,8 @@
 `./extract_country.sh 2025 02 SR`
 
 ## Read in duckdb
-```duckdb suriname.duckdb
+```
+duckdb suriname.duckdb
 v1.2.1 8e52ec4395
 Enter ".help" for usage hints.
 D INSTALL parquet;
@@ -16,14 +17,16 @@ D .quit
 ```
 
 ## Create ontop mapping in obda format
-```vi occurrence-mapping.obda
+```
+vi occurrence-mapping.obda
 vi duckdb.properties
 vi occurrence.ttl
 ```
 
 
 ## Run onto
-```gbif_parquet % ./ontop endpoint \
+```
+gbif_parquet % ./ontop endpoint \
   --ontology=occurrence.ttl \
   --mapping=occurrence-mapping.obda \
   --properties=duckdb.properties
