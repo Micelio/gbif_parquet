@@ -31,3 +31,5 @@ gbif_parquet % ./ontop endpoint \
   --mapping=occurrence-mapping.obda \
   --properties=duckdb.properties
 ```
+
+<img width="1544" alt="image" src="https://github.com/user-attachments/assets/2e4e787b-fda7-4462-814d-56ebc5f09612" />
