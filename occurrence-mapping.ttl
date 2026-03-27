@@ -1,0 +1,9 @@
+@prefix obda: <https://w3id.org/obda/vocabulary#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dwc: <http://rs.tdwg.org/dwc/terms/> .
+
+<#mapping1> a obda:Mapping ;
+    obda:sourceQuery """
+      SELECT * FROM 'occurrence_SR_2025_02.parquet'
+    """ ;
+obda:target <http://example.org/occurrence/Occurrence_\{gbifid\}> a dwc:Occurrence ;  dwc:occurrenceID "{|gbifid|}" ; dwc:scientificName "{|species|}" ; dwc:genus "{|genus|}" ; dwc:family "{|family|}" ; dwc:order "{|order|}" ; dwc:countryCode "{|countrycode|}" .

@@ -1,0 +1,5 @@
+PREFIX wdt:<http://www.wikidata.org/prop/direct/>
+
+SELECT * WHERE {
+   ?s wdt:P625 ?coord .
+}

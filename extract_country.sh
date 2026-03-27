@@ -13,19 +13,22 @@ fi
 
 # === Zero-pad month if needed ===
 MONTH=$(printf "%02d" $MONTH)
-
+echo "[$(date "+%Y-%m-%d %H:%M:%S")] Step 1: Listing files in S3 bucket..."
 # === Step 1: List files in S3 bucket ===
 S3_PATH="s3://gbif-open-data-us-east-1/occurrence/${YEAR}-${MONTH}-01/occurrence.parquet/"
 FILES=$(aws s3 ls "$S3_PATH" --no-sign-request | awk '{print $4}')
 
 if [ -z "$FILES" ]; then
-  echo "❌ No files found for $YEAR-$MONTH!"
+  echo "!! No files found for $YEAR-$MONTH!"
   exit 1
 fi
+echo "[$(date "+%Y-%m-%d %H:%M:%S")]  Found files in S3."
 
 # === Step 2: Build DuckDB SQL ===
-SQL_FILE="query_${COUNTRYCODE}_${YEAR}_${MONTH}.sql"
-PARQUET_FILE="occurrence_${COUNTRYCODE}_${YEAR}_${MONTH}.parquet"
+echo "[$(date "+%Y-%m-%d %H:%M:%S")]  Step 2: Building DuckDB SQL query..."
+SAFE_COUNTRYCODE=$(echo "$COUNTRYCODE" | tr ',' '_')
+SQL_FILE="query_${SAFE_COUNTRYCODE}_${YEAR}_${MONTH}.sql"
+PARQUET_FILE="occurrence_${SAFE_COUNTRYCODE}_${YEAR}_${MONTH}.parquet"
 
 echo "INSTALL httpfs;" > $SQL_FILE
 echo "LOAD httpfs;" >> $SQL_FILE
@@ -44,17 +47,25 @@ sed -i '' '$ s/,$//' $SQL_FILE
 
 # Close SQL
 echo "  ])" >> $SQL_FILE
-echo "  WHERE lower(countrycode) = lower('${COUNTRYCODE}')" >> $SQL_FILE
+# === Build WHERE clause depending on whether COUNTRYCODE contains commas ===
+if [[ "$COUNTRYCODE" == *","* ]]; then
+  # Convert comma-separated list to SQL IN clause
+  COUNTRY_LIST=$(echo "$COUNTRYCODE" | awk -v q="'" -F',' '{for (i=1; i<=NF; i++) printf q tolower($i) q (i<NF?",":"")}')
+  echo "  WHERE lower(countrycode) IN (${COUNTRY_LIST})" >> $SQL_FILE
+else
+  echo "  WHERE lower(countrycode) = lower('${COUNTRYCODE}')" >> $SQL_FILE
+fi
 echo ") TO '${PARQUET_FILE}' (FORMAT PARQUET);" >> $SQL_FILE
 
 echo "" 
-echo "✅ SQL query saved to: $SQL_FILE"
-echo "✅ Output Parquet file will be: $PARQUET_FILE"
+echo "[$(date "+%Y-%m-%d %H:%M:%S")]  SQL query saved to: $SQL_FILE"
+echo "[$(date "+%Y-%m-%d %H:%M:%S")]  Output Parquet file will be: $PARQUET_FILE"
 echo ""
 
 # === Step 3: Run the query ===
-echo "Running DuckDB query..."
+echo "[$(date "+%Y-%m-%d %H:%M:%S")]  Step 3: Running DuckDB query..."
 duckdb < $SQL_FILE
+echo "[$(date "+%Y-%m-%d %H:%M:%S")] Query complete."
 
 echo ""
-echo "🎉 Done! File saved: $PARQUET_FILE"
+echo " Done! File saved: $PARQUET_FILE"

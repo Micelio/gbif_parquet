@@ -1,0 +1,2 @@
+@prefix dwc: <http://rs.tdwg.org/dwc/terms/> .
+@prefix : <http://example.org/occurrence/> .

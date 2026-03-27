@@ -1,0 +1,19 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dwc: <http://rs.tdwg.org/dwc/terms/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+DESCRIBE ?qid WHERE {
+ {SELECT DISTINCT ?qid
+WHERE {
+    {SELECT * WHERE {
+        SERVICE <http://localhost:8080/sparql> {
+            ?s dwc:verbatimScienticName ?o .
+        }
+    } LIMIT 10 }
+    SERVICE <https://query.wikidata.org/sparql> {
+        ?qid wdt:P225 ?o .
+    }
+}
+GROUP BY ?o ?qid}
+}

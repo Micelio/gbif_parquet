@@ -1,0 +1,15 @@
+PREFIX dwc: <http://rs.tdwg.org/dwc/terms/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?institutioncode (count(?institutioncode) as ?counts) WHERE {
+  ?sub wdt:P846 ?gbif ;
+       dwc:taxonRank ?taxonrank ;
+       # dwc:verbatimScienticNameAuthorship ?authorship ;
+       dwc:verbatimScienticName ?scientificName ;
+       dwc:institutionCode ?institutioncode ;
+  }
+GROUP BY ?institutioncode
+ORDER BY DESC(?counts)
+
+
