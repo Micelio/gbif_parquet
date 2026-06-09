@@ -1,11 +1,12 @@
 [PrefixDeclaration]
-ex: http://example.org/occurrence/
-dwc: http://rs.tdwg.org/dwc/terms/
-wdt: http://www.wikidata.org/prop/direct/
-geo: http://www.opengis.net/ont/geosparql#
+gbif:       https://www.gbif.org/occurrence/
+gbifterm:   http://rs.gbif.org/terms/1.0/
+dwc:        http://rs.tdwg.org/dwc/terms/
+geo:        http://www.opengis.net/ont/geosparql#
+wdt:        http://www.wikidata.org/prop/direct/
 
 [MappingDeclaration] @collection [[
 mappingId   mapping1
-target      ex:Occurrence_{gbifid} a dwc:Occurrence ; wdt:P846 "{gbifid}"; dwc:taxonRank "{taxonrank}"; dwc:institutionCode "{institutioncode}"; dwc:license "{license}"; dwc:verbatimScienticName "{verbatimscientificname}"; dwc:recordedby "{recordedby}"; ex:mediaType "{mediatype}"; dwc:identifiedby "{identifiedby}";dwc:verbatimScientificNameAuthorship "{verbatimscientificnameauthorship}";  wdt:P625 "Point({decimalLongitude} {decimalLatitude})"^^geo:wktLiteral .
-source     SELECT gbifid, species, genus, family, "order", countrycode, decimallatitude, decimallongitude, taxonrank, institutioncode, verbatimscientificnameauthorship, verbatimscientificname, license, recordedby, identifiedby, mediatype  FROM 'occurrence_SR_2025_02.parquet'
+target      gbif:{gbifid} a dwc:Occurrence ; gbifterm:gbifID "{gbifid}" ; dwc:taxonRank "{taxonrank}" ; dwc:institutionCode "{institutioncode}" ; dwc:license "{license}" ; dwc:verbatimScientificName "{verbatimscientificname}" ; dwc:recordedBy "{recordedby}" ; dwc:mediaType "{mediatype}" ; dwc:identifiedBy "{identifiedby}" ; dwc:verbatimScientificNameAuthorship "{verbatimscientificnameauthorship}" ; wdt:P625 "Point({decimallongitude} {decimallatitude})"^^geo:wktLiteral .
+source      SELECT gbifid, species, genus, family, "order", countrycode, decimallatitude, decimallongitude, taxonrank, institutioncode, verbatimscientificnameauthorship, verbatimscientificname, license, recordedby, identifiedby, mediatype  FROM 'occurrence_SR_2025_02.parquet'
 ]]
