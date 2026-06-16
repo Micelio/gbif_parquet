@@ -3,8 +3,8 @@
 # === Input Parameters ===
 file=$1
 db=$2
-if [ -z "$file" ] || [ -z $db ] ; then
-  echo "Usage: ./create_view_duckdb.sh $file $db"
+if [ -z "$file" ] || [ -z "$db" ] ; then
+  echo "Usage: $0 <parquet_url_or_path> <duckdb_file>"
   exit 1
 fi
 
