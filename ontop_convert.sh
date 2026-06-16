@@ -1,26 +1,25 @@
 #!/bin/bash
 
 # === Input Parameters ===
-YEAR=$1
-MONTH=$2
+database=$1
 
-if [ -z "$YEAR" ] || [ -z "$MONTH" ]; then
-  echo "Usage: ./extract_country.sh <year> <month> <country_code>"
-  echo "Example: ./extract_country.sh 2025 02"
+if [ -z "$database" ] ; then
+  echo "Usage: ./ontop_convert.sh $database"
   exit 1
 fi
 
+prop=duckdb_ontop_$database.properties
+echo "jdbc.url = jdbc:duckdb:./$database" > $prop
+echo "jdbc.driver = org.duckdb.DuckDBDriver" >> $prop
+echo "ontop.inferDefaultDatatype=true" >> $prop
 
-echo "jdbc.url = jdbc:duckdb:./view_parquet_${YEAR}_${MONTH}.duckdb" > duck_${YEAR}_${MONTH}.properties
-echo "jdbc.driver = org.duckdb.DuckDBDriver" >> duck_${YEAR}_${MONTH}.properties
-echo "ontop.inferDefaultDatatype=true" >> duck_${YEAR}_${MONTH}.properties
-
-if [ -f conv_${YEAR}_${MONTH}.ttl ]
+ONTOP_LOG_CONFIG=./ontop_logback.xml
+export ONTOP_LOG_CONFIG
+v=$( ontop --version| cut -f 3 -d ' '|sed 's|\.||g')
+if [ $v -gt 560 ]
 then
-    rm conv_${YEAR}_${MONTH}.ttl
+  ontop materialize --allow-duplicates=true -m  occurrence-rml.ttl  -p $prop -f turtle
+else
+  ontop materialize -m  occurrence-rml.ttl  -p $prop -f turtle
 fi
-
-mkfifo conv_${YEAR}_${MONTH}.ttl
-
-ontop materialize  -m  occurrence-rml.ttl  -p duck_${YEAR}_${MONTH}.properties -f turtle -o conv_${YEAR}_${MONTH}.ttl
 

@@ -121,7 +121,7 @@
     ] ;
     rr:predicateObjectMap [
         rr:predicate dwc:license ;
-        rr:objectMap [ rr:column "license" ] ;
+        rr:objectMap [ rr:template "https://creativecommons.org/{license_iri}" ] ;
     ] ;
     rr:predicateObjectMap [
         rr:predicate dwc:rightsHolder ;
@@ -151,6 +151,13 @@
         rr:predicate dwc:issue ;
         rr:objectMap [ rr:column "issue" ] ;
     ] ;
+#     rr:predicateObjectMap [
+#         rr:predicate wdt:P625 ;
+#         rr:objectMap [
+#             rr:column "circle" ;
+#             rr:datatype geo:wktLiteral
+#         ] ;
+#     ] ;
     rr:predicateObjectMap [
         rr:predicate wdt:P625 ;
         rr:objectMap [
@@ -160,7 +167,11 @@
     ] ;
     rr:predicateObjectMap [
         rr:predicate dwciri:toTaxon ;
-        rr:objectMap [ rr:template "https://www.example.org/namedTaxonomicClaim/{taxon_string}" ] ;
+        rr:objectMap [ rr:template "https://www.gbif.org/species/{taxonkey}" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwciri:toTaxon ;
+        rr:objectMap [ rr:template "https://www.gbif.org/species/{specieskey}" ] ;
     ] ;
     rr:predicateObjectMap [
         rr:predicate dwciri:inDescribedPlace ;
@@ -175,7 +186,55 @@
     rr:logicalTable <#OccurrenceQuery> ;
 
     rr:subjectMap [
-        rr:template "https://www.example.org/namedTaxonomicClaim/{taxon_string}" ;
+        rr:template "https://www.gbif.org/species/{taxonkey}" ;
+    ] ;
+
+    rr:predicateObjectMap [
+        rr:predicate dwc:kingdom ;
+        rr:objectMap [ rr:column "kingdom" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwc:phylum ;
+        rr:objectMap [ rr:column "phylum" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwc:class ;
+        rr:objectMap [ rr:column "class" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwc:order ;
+        rr:objectMap [ rr:column "order" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwc:family ;
+        rr:objectMap [ rr:column "family" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwc:genus ;
+        rr:objectMap [ rr:column "genus" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwc:taxonRank ;
+        rr:objectMap [ rr:column "taxonrank" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwc:taxonKey ;
+        rr:objectMap [ rr:template "https://www.gbif.org/species/{taxonkey}" ] ;
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate dwc:verbatimScientificNameAuthorship ;
+        rr:objectMap [ rr:column "verbatimscientificnameauthorship" ] ;
+    ] .
+
+### ---------------------------------------------------------
+### Map 2: Taxonomic Claim Breakdown
+### ---------------------------------------------------------
+<#SpeciesClaimMap>
+    a rr:TriplesMap ;
+    rr:logicalTable <#OccurrenceQuery> ;
+
+    rr:subjectMap [
+        rr:template "https://www.gbif.org/species/{specieskey}" ;
     ] ;
 
     rr:predicateObjectMap [
@@ -223,17 +282,14 @@
         rr:objectMap [ rr:column "verbatimscientificname" ] ;
     ] ;
     rr:predicateObjectMap [
-        rr:predicate dwc:taxonKey ;
+        rr:predicate rdfs:subClassOf ;
         rr:objectMap [ rr:template "https://www.gbif.org/species/{taxonkey}" ] ;
-    ] ;
-    rr:predicateObjectMap [
-        rr:predicate dwc:speciesKey ;
-        rr:objectMap [ rr:template "https://www.gbif.org/species/{specieskey}" ] ;
     ] ;
     rr:predicateObjectMap [
         rr:predicate dwc:verbatimScientificNameAuthorship ;
         rr:objectMap [ rr:column "verbatimscientificnameauthorship" ] ;
     ] .
+
 ### ---------------------------------------------------------
 ### Map 2: Named Location
 ### ---------------------------------------------------------
@@ -246,15 +302,15 @@
     ] ;
 
     rr:predicateObjectMap [
-        rr:predicate dwc:countryCode ;
-        rr:objectMap [ rr:column "countrycode" ] ;
-    ] ;
+         rr:predicate dwc:countryCode ;
+         rr:objectMap [ rr:column "countrycode" ] ;
+     ] ;
 
-   rr:predicateObjectMap [
-        rr:predicate dwc:locality ;
-        rr:objectMap [ rr:column "locality" ] ;
-    ] ;
     rr:predicateObjectMap [
-        rr:predicate dwc:stateProvince ;
-        rr:objectMap [ rr:column "stateprovince" ] ;
+         rr:predicate dwc:locality ;
+         rr:objectMap [ rr:column "locality" ] ;
+     ] ;
+     rr:predicateObjectMap [
+         rr:predicate dwc:stateProvince ;
+         rr:objectMap [ rr:column "stateprovince" ] ;
     ] .
