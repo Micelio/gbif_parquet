@@ -17,7 +17,7 @@ source s3occurence.sh
 
 files=$(listOccurenceFiles "https://gbif-open-data-eu-central-1.s3.eu-central-1.amazonaws.com/" $year $month)
 
-for file in $(echo -e "$files" | head)
+for file in $(echo -e "$files")
 do
     date=$(echo "$file" |cut -f 5 -d '/')
     year=${date:0:4}
