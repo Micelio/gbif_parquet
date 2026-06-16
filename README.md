@@ -1,35 +1,29 @@
-# gbif_parquet
-## Extract subset from gbif on aws
-`./extract_country.sh 2025 02 SR`
+# gbif_parquet to rdf/turtle
 
-## Read in duckdb
+To convert a whole GBIF Snapshot into rdf. This will currently stream parquet from aws eu-west.
+
+```bash
+/ontop_convert_all.sh ${year} ${month} > big_turtle_file.ttl
 ```
-duckdb suriname.duckdb
-v1.2.1 8e52ec4395
-Enter ".help" for usage hints.
-D INSTALL parquet;
-D LOAD parquet;
-D 
-D CREATE TABLE occurrence AS
-  SELECT *
-  FROM parquet_scan('occurrence_SR_2025_02.parquet');
-D .quit
+e.g.
+```bash
+# validate there are no errors in the generated turtle and count the raw triples
+/ontop_convert_all.sh 2026 01 | pv | riot --validate --syntax turtle --count
 ```
 
-## Create ontop mapping in obda format
-```
-vi occurrence-mapping.obda
-vi duckdb.properties
-vi occurrence.ttl
+To first download the parquet files locally
+
+```bash
+ ./download_gbif.sh ${year} ${month}
 ```
 
 
-## Run onto
-```
-gbif_parquet % ./ontop endpoint \
-  --ontology=occurrence.ttl \
-  --mapping=occurrence-mapping.obda \
-  --properties=duckdb.properties
-```
+# Issues
 
-<img width="1544" alt="image" src="https://github.com/user-attachments/assets/2e4e787b-fda7-4462-814d-56ebc5f09612" />
+TODO:
+
+1. Mapping is done via rml defined in occurrence-rml.ttl. This is not optimal and help from a gbif/darwin core expert is very welcome
+2. GBIFIDs are not unique in the parquet files, can't create unique index to help improve rdf generation speed
+3. This is slower than it needs to be (ontop materialize 5.6.0 will improve this a lot)
+4. Use ping to figure out which AWS location is closest and download/stream from there
+5. Scripts assume local relative paths
