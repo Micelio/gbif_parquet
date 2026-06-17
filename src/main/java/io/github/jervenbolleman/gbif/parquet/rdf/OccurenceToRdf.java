@@ -8,14 +8,16 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.EnumMap;
+import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.PrimitiveIterator.OfInt;
@@ -64,7 +66,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			PREFIX dwciri:<http://rs.tdwg.org/dwc/iri/>
 			PREFIX geo: <http://www.opengis.net/ont/geosparql#>
 			PREFIX wdt: <http://www.wikidata.org/prop/direct/>
-			PREFIX lc: <https://www.example.org/namedLocation/>
+			PREFIX nl: <https://www.example.org/namedLocation/>
 			PREFIX ccby4: <https://creativecommons.org/licenses/by/4.0/>
 			PREFIX ccby4nc: <https://creativecommons.org/licenses/by-nc/4.0/>
 			PREFIX cc0: <https://creativecommons.org/publicdomain/zero/1.0/>
@@ -125,7 +127,10 @@ public class OccurenceToRdf implements Callable<Integer> {
 	private static final byte[] taxonrank = (PRE + "dwc:taxonRank ").getBytes(UTF_8);
 	private static final byte[] species = (PRE + "dwc:species ").getBytes(UTF_8);
 	private static final byte[] infraspecificepithet = (PRE + "dwc:infraspecificEpithet ").getBytes(UTF_8);
-	private static final byte[] inDescribedPlace = (PRE + "dwciri:inDescribedPlace ").getBytes(UTF_8);
+	private static final byte[] inDescribedPlace = (" dwciri:inDescribedPlace ").getBytes(UTF_8);
+	private static final byte[] stateProvince = (PRE + "dwc:stateProvince ").getBytes(UTF_8);
+	private static final byte[] localityCode = (PRE + "dwc:locality ").getBytes(UTF_8);
+	
 	private static final byte[] verbatimscientificnameauthorship = (PRE + " dwc:verbatimScientificNameAuthorship ")
 			.getBytes(UTF_8);
 
@@ -135,7 +140,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 	private static final byte[] CC0_1_0 = "cc0: ".getBytes(UTF_8);
 
 	private void convertRows(RowReader rows, Map<KnownColumns, Integer> knownColumnsMap, OutputStream fos)
-			throws IOException {
+			throws IOException, NoSuchAlgorithmException {
 		byte[] buffer = new byte[BUFFER_SIZE];
 		int bufferUse = 0;
 		int gbifColumnId = getColumnId(knownColumnsMap, KnownColumns.gbifid);
@@ -171,6 +176,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 		int taxonkeyId = getColumnId(knownColumnsMap, KnownColumns.taxonkey);
 		int speciesId = getColumnId(knownColumnsMap, KnownColumns.specieskey);
 		MutableRoaringBitmap seenTaxons = new MutableRoaringBitmap();
+		MessageDigest md = MessageDigest.getInstance("SHA-256");
 		while (rows.hasNext()) {
 			rows.next();
 			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifColumnId);
@@ -188,40 +194,65 @@ public class OccurenceToRdf implements Callable<Integer> {
 			bufferUse = addLicense(rows, fos, buffer, bufferUse, getColumnId(knownColumnsMap, KnownColumns.license));
 
 			bufferUse = addTaxon(rows, fos, buffer, bufferUse, taxonkeyId, speciesId, seenTaxons, knownColumnsMap);
-//			bufferUse = addLocation(rows, fos, buffer, bufferUse, gbifColumnId, knownColumnsMap);
+			bufferUse = addLocation(rows, fos, buffer, bufferUse, gbifColumnId, knownColumnsMap, md);
 		}
 		fos.write(buffer, 0, bufferUse);
 	}
 
 	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId,
-			Map<KnownColumns, Integer> knownColumnsMap) throws IOException {
+			Map<KnownColumns, Integer> knownColumnsMap, MessageDigest md) throws IOException {
 		int countryCodeId = getColumnId(knownColumnsMap, KnownColumns.countrycode);
 		int stateProvinceId = getColumnId(knownColumnsMap, KnownColumns.stateprovince);
 		int localityCodeId = getColumnId(knownColumnsMap, KnownColumns.locality);
 		if (countryCodeId < 0 && stateProvinceId < 0 && localityCodeId < 0) {
 			return bufferUse;
 		}
-		if (! rows.isNull(countryCodeId)) {
+		if (!rows.isNull(countryCodeId)) {
+			String cc = rows.getString(countryCodeId);
 			bufferUse = add(buffer, gbif, fos, bufferUse);
 			byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
 			bufferUse = add(buffer, gbifid, fos, bufferUse);
 			bufferUse = add(buffer, inDescribedPlace, fos, bufferUse);
-			String stateProvince = null;
-			String localityCode = null;
-			if (! rows.isNull(stateProvinceId)) {
-				stateProvince  = escape(rows.getString(stateProvinceId));
+			String stateProvinceS = null;
+			String localityCodeS = null;
+			String locIri;
+
+			if (!rows.isNull(stateProvinceId) && !rows.isNull(localityCodeId)) {
+				stateProvinceS = escape(rows.getString(stateProvinceId));
+				localityCodeS = escape(rows.getString(localityCodeId));
+
+				locIri = "nl:" + HexFormat.of()
+						.formatHex(md.digest((cc + "-sp-" + stateProvinceS + "lc" + localityCodeS).getBytes(UTF_8)));
+			} else if (!rows.isNull(stateProvinceId)) {
+				stateProvinceS = escape(rows.getString(stateProvinceId));
+				locIri = "nl:" + HexFormat.of().formatHex(md.digest((cc + "-sp-" + stateProvinceS).getBytes(UTF_8)));
+			} else if (!rows.isNull(localityCodeId)) {
+				localityCodeS = escape(rows.getString(localityCodeId));
+				locIri = "nl:" + HexFormat.of().formatHex(md.digest((cc + "lc" + localityCodeS).getBytes(UTF_8)));
+			} else {
+				locIri = "nl:" + cc;
 			}
-			if (! rows.isNull(localityCodeId)) {
-				localityCode = escape(rows.getString(localityCodeId));
+			bufferUse = add(buffer, locIri.getBytes(UTF_8), fos, bufferUse);
+			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
+			bufferUse = add(buffer, locIri.getBytes(UTF_8), fos, bufferUse);
+			bufferUse = add(buffer, " a dwc:Location\n ".getBytes(UTF_8), fos, bufferUse);
+			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeId, true);
+			if (stateProvinceS != null) {
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, stateProvince,
+						stateProvinceId, true);
 			}
+			if (localityCodeS != null) {
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, localityCode,
+						localityCodeId, true);
+			}
+			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 		}
 
 		return bufferUse;
 	}
 
 	private String escape(String string) {
-		// TODO Auto-generated method stub
-		return null;
+		return string.replace("\\", "\\\\");
 	}
 
 	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int taxonkeyId, int speciesId,
@@ -249,8 +280,8 @@ public class OccurenceToRdf implements Callable<Integer> {
 	}
 
 	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
-			MutableRoaringBitmap seenTaxons, String taxon, String taxa,
-			Map<KnownColumns, Integer> knownColumnsMap) throws IOException {
+			MutableRoaringBitmap seenTaxons, String taxon, String taxa, Map<KnownColumns, Integer> knownColumnsMap)
+			throws IOException {
 		if (taxon != null) {
 			int taxonInt = Integer.parseInt(taxon);
 			if (!seenTaxons.contains(taxonInt)) {
@@ -275,7 +306,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 						getColumnId(knownColumnsMap, KnownColumns.taxonrank), false);
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, verbatimscientificnameauthorship,
 						getColumnId(knownColumnsMap, KnownColumns.verbatimscientificnameauthorship), true);
-				if (taxa!=null) {
+				if (taxa != null) {
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, species,
 							getColumnId(knownColumnsMap, KnownColumns.species), false);
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, infraspecificepithet,
@@ -476,6 +507,9 @@ public class OccurenceToRdf implements Callable<Integer> {
 		} catch (IOException e) {
 			log.log(Level.SEVERE, "Error reading file: " + path1, e);
 			return 2;
+		} catch (NoSuchAlgorithmException e) {
+			log.log(Level.SEVERE, "NoSuchAlgorithmException: " + path1, e);
+			return 3;
 		}
 		return 0;
 	}
@@ -545,7 +579,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 	}
 
 	private String escapeQuotes(String li) {
-		li = li.replace("\"", "\\\"");
+		li = li.replace("\\", "\\\\").replace("\"", "\\\"");
 		return li;
 	}
 
