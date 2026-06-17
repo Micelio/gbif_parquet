@@ -308,9 +308,9 @@ public class OccurenceToRdf implements Callable<Integer> {
 						getColumnId(knownColumnsMap, KnownColumns.verbatimscientificnameauthorship), true);
 				if (taxa != null) {
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, species,
-							getColumnId(knownColumnsMap, KnownColumns.species), false);
+							getColumnId(knownColumnsMap, KnownColumns.species), true);
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, infraspecificepithet,
-							getColumnId(knownColumnsMap, KnownColumns.infraspecificepithet), false);
+							getColumnId(knownColumnsMap, KnownColumns.infraspecificepithet), true);
 					bufferUse = add(buffer, subclassof, fos, bufferUse);
 					bufferUse = add(buffer, gbifsp, fos, bufferUse);
 				}
@@ -361,10 +361,10 @@ public class OccurenceToRdf implements Callable<Integer> {
 				KnownColumns.identifiedby.columnName(), true);
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, dateidentified, dateidentifiedId, XSD_DATE,
 				(s) -> fromTimestampToXsdDate(s, dateidentifiedId));
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderId, false);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordedby, recordedbyId, false);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderId, true);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordedby, recordedbyId, true);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, typestatus, KnownColumns.typestatus.columnName(),
-				false);
+				true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, establishmentmeans, establishmentmeansId, false);
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, lastinterpreted, lastinterpretedId, XSD_DATE,
 				(s) -> fromTimestampToXsdDate(s, lastinterpretedId));
