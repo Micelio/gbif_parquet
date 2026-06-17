@@ -64,7 +64,6 @@ public class OccurenceToRdf implements Callable<Integer> {
 			PREFIX dwciri:<http://rs.tdwg.org/dwc/iri/>
 			PREFIX geo: <http://www.opengis.net/ont/geosparql#>
 			PREFIX wdt: <http://www.wikidata.org/prop/direct/>
-			PREFIX tt: <https://www.example.org/namedTaxonomicClaim/>
 			PREFIX lc: <https://www.example.org/namedLocation/>
 			PREFIX ccby4: <https://creativecommons.org/licenses/by/4.0/>
 			PREFIX ccby4nc: <https://creativecommons.org/licenses/by-nc/4.0/>
@@ -75,11 +74,12 @@ public class OccurenceToRdf implements Callable<Integer> {
 	private static final byte[] END_TRIPLE_BLOCK = " .\n".getBytes(UTF_8);
 	private static final byte[] CLOSE_LITERAL = "\"".getBytes(UTF_8);
 	private static final String PRE = ";\n  ";
+	private static final byte[] subclassof = (PRE + "rdfs:subClassOf ").getBytes(UTF_8);
 	private static final byte[] countryCode = (PRE + "dwc:countryCode ").getBytes(UTF_8);
 	private static final byte[] closeDoubleLiteral = "\"^^xsd:double ".getBytes(UTF_8);
-	private static final byte[] gbifid = "gbif:".getBytes(UTF_8);
+	private static final byte[] gbif = "gbif:".getBytes(UTF_8);
 	private static final byte[] gbifsp = "gbifsp:".getBytes(UTF_8);
-	private static final byte[] isOccurence = (" a dwc:Occurence "+PRE+"gbifterm:gbifID ").getBytes(UTF_8);
+	private static final byte[] isOccurence = (" a dwc:Occurence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
 	private static final byte[] occurrenceStatus = (PRE + "dwc:occurrenceStatus ").getBytes(UTF_8);
 	private static final byte[] individualCount = (PRE + "dwc:individualCount ").getBytes(UTF_8);
 	private static final byte[] publishingOrgKey = (PRE + "dwc:publishingOrgKey gbifpub:").getBytes(UTF_8);
@@ -92,10 +92,10 @@ public class OccurenceToRdf implements Callable<Integer> {
 	private static final byte[] depth = (PRE + "dwc:depth ").getBytes(UTF_8);
 	private static final byte[] depthaccuracy = (PRE + "dwc:depthaccuracy ").getBytes(UTF_8);
 
-	private static final byte[] eventDate = (PRE + " dwc:eventDate ").getBytes(UTF_8);
-	private static final byte[] day = (PRE + " dwc:day ").getBytes(UTF_8);
-	private static final byte[] month = (PRE + "  dwc:month ").getBytes(UTF_8);
-	private static final byte[] year = (PRE + "  dwc:year ").getBytes(UTF_8);
+	private static final byte[] eventDate = (PRE + "dwc:eventDate ").getBytes(UTF_8);
+	private static final byte[] day = (PRE + "dwc:day ").getBytes(UTF_8);
+	private static final byte[] month = (PRE + "dwc:month ").getBytes(UTF_8);
+	private static final byte[] year = (PRE + "dwc:year ").getBytes(UTF_8);
 
 	private static final byte[] basisOfRecord = (PRE + " dwc:basisOfRecord ").getBytes(UTF_8);
 	private static final byte[] institutioncode = (PRE + "dwc:institutionCode ").getBytes(UTF_8);
@@ -187,20 +187,52 @@ public class OccurenceToRdf implements Callable<Integer> {
 			bufferUse = addLicense(rows, fos, buffer, bufferUse, getColumnId(knownColumnsMap, KnownColumns.license));
 
 			bufferUse = addTaxon(rows, fos, buffer, bufferUse, taxonkeyId, speciesId, seenTaxons, knownColumnsMap);
+//			bufferUse = addLocation(rows, fos, buffer, bufferUse, gbifColumnId, knownColumnsMap);
 		}
 		fos.write(buffer, 0, bufferUse);
+	}
+
+	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId,
+			Map<KnownColumns, Integer> knownColumnsMap) throws IOException {
+		int countryCodeId = getColumnId(knownColumnsMap, KnownColumns.countrycode);
+		int stateProvinceId = getColumnId(knownColumnsMap, KnownColumns.stateprovince);
+		int localityCodeId = getColumnId(knownColumnsMap, KnownColumns.locality);
+		if (countryCodeId < 0 && stateProvinceId < 0 && localityCodeId < 0) {
+			return bufferUse;
+		}
+		if (! rows.isNull(countryCodeId)) {
+			bufferUse = add(buffer, gbif, fos, bufferUse);
+			byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
+			bufferUse = add(buffer, gbifid, fos, bufferUse);
+			bufferUse = add(buffer, inDescribedPlace, fos, bufferUse);
+			String stateProvince = null;
+			String localityCode = null;
+			if (! rows.isNull(stateProvinceId)) {
+				stateProvince  = escape(rows.getString(stateProvinceId));
+			}
+			if (! rows.isNull(localityCodeId)) {
+				localityCode = escape(rows.getString(localityCodeId));
+			}
+		}
+
+		return bufferUse;
+	}
+
+	private String escape(String string) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int taxonkeyId, int speciesId,
 			MutableRoaringBitmap seenTaxons, Map<KnownColumns, Integer> knownColumnsMap) throws IOException {
 		String taxon = null;
 		String species = null;
-		if (taxonkeyId < 0 || rows.isNull(taxonkeyId)) {
+		if (taxonkeyId < 0 || !rows.isNull(taxonkeyId)) {
 			taxon = rows.getString(taxonkeyId);
 			bufferUse = add(buffer, toTaxon, fos, bufferUse);
 			bufferUse = add(buffer, rows.getString(taxonkeyId).getBytes(UTF_8), fos, bufferUse);
 		}
-		if (speciesId < 0 || rows.isNull(speciesId)) {
+		if (speciesId < 0 || !rows.isNull(speciesId)) {
 			species = rows.getString(speciesId);
 			if (species != null && !species.equals(taxon)) {
 				bufferUse = add(buffer, toTaxon, fos, bufferUse);
@@ -208,18 +240,19 @@ public class OccurenceToRdf implements Callable<Integer> {
 			}
 		}
 		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
-		bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, false, knownColumnsMap);
+		bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null, knownColumnsMap);
 		if (species != null && !species.equals(taxon)) {
-			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, true, knownColumnsMap);
+			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon, knownColumnsMap);
 		}
 		return bufferUse;
 	}
 
-	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, MutableRoaringBitmap seenTaxons,
-			String taxon, boolean isSpecies, Map<KnownColumns, Integer> knownColumnsMap) throws IOException {
+	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
+			MutableRoaringBitmap seenTaxons, String taxon, String taxa,
+			Map<KnownColumns, Integer> knownColumnsMap) throws IOException {
 		if (taxon != null) {
 			int taxonInt = Integer.parseInt(taxon);
-			if (seenTaxons.checkedAdd(taxonInt)) {
+			if (!seenTaxons.contains(taxonInt)) {
 				seenTaxons.add(taxonInt);
 				bufferUse = add(buffer, gbifsp, fos, bufferUse);
 				bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
@@ -241,11 +274,13 @@ public class OccurenceToRdf implements Callable<Integer> {
 						getColumnId(knownColumnsMap, KnownColumns.taxonrank), false);
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, verbatimscientificnameauthorship,
 						getColumnId(knownColumnsMap, KnownColumns.verbatimscientificnameauthorship), false);
-				if (isSpecies) {
+				if (taxa!=null) {
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, species,
 							getColumnId(knownColumnsMap, KnownColumns.species), false);
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, infraspecificepithet,
 							getColumnId(knownColumnsMap, KnownColumns.infraspecificepithet), false);
+					bufferUse = add(buffer, subclassof, fos, bufferUse);
+					bufferUse = add(buffer, gbifsp, fos, bufferUse);
 				}
 				bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 				return bufferUse;
@@ -296,11 +331,13 @@ public class OccurenceToRdf implements Callable<Integer> {
 				(s) -> fromTimestampToXsdDate(s, dateidentifiedId));
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderId, false);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordedby, recordedbyId, false);
-		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, typestatus, KnownColumns.typestatus.columnName(), false);
+		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, typestatus, KnownColumns.typestatus.columnName(),
+				false);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, establishmentmeans, establishmentmeansId, false);
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, lastinterpreted, lastinterpretedId, XSD_DATE,
 				(s) -> fromTimestampToXsdDate(s, lastinterpretedId));
-		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, mediatype, KnownColumns.mediatype.columnName(), false);
+		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, mediatype, KnownColumns.mediatype.columnName(),
+				false);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, issue, KnownColumns.issue.columnName(), true);
 		return bufferUse;
 	}
@@ -471,11 +508,13 @@ public class OccurenceToRdf implements Callable<Integer> {
 		} else {
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
-			String toPrint = rows.getString(colId);
 			if (escape) {
+				String toPrint = rows.getString(colId);
 				toPrint = escapeQuotes(toPrint);
-			};
-			bufferUse = add(buffer, toPrint.getBytes(UTF_8), fos, bufferUse);
+				bufferUse = add(buffer, toPrint.getBytes(UTF_8), fos, bufferUse);
+			} else {
+				bufferUse = add(buffer, rows.getBinary(colId), fos, bufferUse);
+			}
 			bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
 			return bufferUse;
 		}
@@ -523,7 +562,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 
 	private int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId)
 			throws IOException {
-		bufferUse = add(buffer, gbifid, fos, bufferUse);
+		bufferUse = add(buffer, gbif, fos, bufferUse);
 
 		byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
