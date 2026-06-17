@@ -68,6 +68,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			PREFIX ccby4: <https://creativecommons.org/licenses/by/4.0/>
 			PREFIX ccby4nc: <https://creativecommons.org/licenses/by-nc/4.0/>
 			PREFIX cc0: <https://creativecommons.org/publicdomain/zero/1.0/>
+			PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 				""".getBytes(UTF_8);
 
 	private static final int BUFFER_SIZE = 16 * 8096;
@@ -273,7 +274,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, taxonrank,
 						getColumnId(knownColumnsMap, KnownColumns.taxonrank), false);
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, verbatimscientificnameauthorship,
-						getColumnId(knownColumnsMap, KnownColumns.verbatimscientificnameauthorship), false);
+						getColumnId(knownColumnsMap, KnownColumns.verbatimscientificnameauthorship), true);
 				if (taxa!=null) {
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, species,
 							getColumnId(knownColumnsMap, KnownColumns.species), false);
