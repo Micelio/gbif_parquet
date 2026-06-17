@@ -4,25 +4,31 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.OutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.PrimitiveIterator.OfInt;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
+import javax.sql.rowset.CachedRowSet;
+
 import dev.hardwood.InputFile;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
+import dev.hardwood.row.StructAccessor;
 import dev.hardwood.schema.ColumnProjection;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
@@ -32,56 +38,99 @@ import picocli.CommandLine.Parameters;
 
 @Command(name = "occurence-to-rdf", description = "Convert GBIF occurrence parquet files to RDF")
 public class OccurenceToRdf implements Callable<Integer> {
-	private static final byte[] PREFIXES = """
-			PREFIX gbifid:<https://www.gbif.org/occurrence/>
-		PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-		PREFIX gbif: <https://www.gbif.org/occurrence/>
-		PREFIX gbifterm: <http://rs.gbif.org/terms/1.0/>
-		PREFIX gbifds: <https://www.gbif.org/dataset/>
-		PREFIX gbifsp: <https://www.gbif.org/species/>
-		PREFIX gbifpub: <https://www.gbif.org/publisher/>
-		PREFIX dwc: <http://rs.tdwg.org/dwc/terms/>
-		PREFIX dwciri:<http://rs.tdwg.org/dwc/iri/>
-		PREFIX geo: <http://www.opengis.net/ont/geosparql#>
-		PREFIX wdt: <http://www.wikidata.org/prop/direct/>
-		PREFIX tt: <https://www.example.org/namedTaxonomicClaim/>
-		PREFIX lc: <https://www.example.org/namedLocation/>
 
-			""".getBytes(UTF_8);
-	
+	private static final byte[] XSD_DATE = "\"^^xsd:date".getBytes(UTF_8);
+	private static final byte[] XSD_GDAY = "\"^^xsd:gDay".getBytes(UTF_8);
+	private static final byte[] XSD_GMONTH = "\"^^xsd:gMonth".getBytes(UTF_8);
+	private static final byte[] XSD_GYEAR = "\"^^xsd:gYear".getBytes(UTF_8);
+
+	private static final byte[] POINT = "; wdt:P625 \"Point(".getBytes(UTF_8);
+	private static final byte[] SPACE = " ".getBytes(UTF_8);
+	private static final byte[] CLOSE_POINT = ")\"^^geo:wktLiteral ".getBytes(UTF_8);
+	private static final byte[] PREFIXES = """
+				PREFIX gbifid:<https://www.gbif.org/occurrence/>
+			PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+			PREFIX gbif: <https://www.gbif.org/occurrence/>
+			PREFIX gbifterm: <http://rs.gbif.org/terms/1.0/>
+			PREFIX gbifds: <https://www.gbif.org/dataset/>
+			PREFIX gbifsp: <https://www.gbif.org/species/>
+			PREFIX gbifpub: <https://www.gbif.org/publisher/>
+			PREFIX dwc: <http://rs.tdwg.org/dwc/terms/>
+			PREFIX dwciri:<http://rs.tdwg.org/dwc/iri/>
+			PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+			PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+			PREFIX tt: <https://www.example.org/namedTaxonomicClaim/>
+			PREFIX lc: <https://www.example.org/namedLocation/>
+
+				""".getBytes(UTF_8);
+
 	private static final int BUFFER_SIZE = 16 * 8096;
-	private static final byte[] countryCode = "\n; dwc:countryCode \"".getBytes(UTF_8);
-	private static final byte[] closeLiteral = "\" ".getBytes(UTF_8);
+	private static final byte[] END_TRIPLE_BLOCK = " . \n".getBytes(UTF_8);
+	private static final byte[] CLOSE_LITERAL = "\" ".getBytes(UTF_8);
+	private static final byte[] CLOSE_IRI = "> ".getBytes(UTF_8);
+
+	private static final byte[] countryCode = "; dwc:countryCode \"".getBytes(UTF_8);
 	private static final byte[] closeDoubleLiteral = "\"^^xsd:double ".getBytes(UTF_8);
 	private static final byte[] gbifid = "gbif:".getBytes(UTF_8);
-	private static final byte[] isOccurence = " a dwc:Occurence ;\n gbifterm:gbifID \"".getBytes(UTF_8);
-	private static final byte[] occurrenceStatus = "\n; dwc:occurrenceStatus \"".getBytes(UTF_8);
-	private static final byte[] individualCount = "\n; dwc:individualCount ".getBytes(UTF_8);
-	private static final byte[] publishingOrgKey = "\n; dwc:publishingOrgKey gbifpub:".getBytes(UTF_8);
-	private static final byte[] decimalLatitude ="\n; dwc:decimalLatitude \"".getBytes(UTF_8);
-	private static final byte[] decimalLongitude = "\n; dwc:decimalLongitude \"".getBytes(UTF_8);
-	private static final byte[] coordinateUncertaintyInMeters = "\n; dwc:coordinateUncertaintyInMeters \"".getBytes(UTF_8);
-	private static final byte[] elevation = "\n; dwc:elevation \"".getBytes(UTF_8);
-	private static final byte[] elevationaccuracy  = "\n; dwc:elevationAccuracy \"".getBytes(UTF_8);
-	private static final byte[] depth  = "\n; dwc:depth \"".getBytes(UTF_8);
-	private static final byte[] endTripleBlock = " . \n".getBytes(UTF_8);
-	
-	
+	private static final byte[] isOccurence = " a dwc:Occurence ; gbifterm:gbifID \"".getBytes(UTF_8);
+	private static final byte[] occurrenceStatus = "; dwc:occurrenceStatus \"".getBytes(UTF_8);
+	private static final byte[] individualCount = "; dwc:individualCount ".getBytes(UTF_8);
+	private static final byte[] publishingOrgKey = "; dwc:publishingOrgKey gbifpub:".getBytes(UTF_8);
+	private static final byte[] decimalLatitude = "; dwc:decimalLatitude \"".getBytes(UTF_8);
+	private static final byte[] decimalLongitude = "; dwc:decimalLongitude \"".getBytes(UTF_8);
+	private static final byte[] coordinateUncertaintyInMeters = "; dwc:coordinateUncertaintyInMeters \""
+			.getBytes(UTF_8);
+	private static final byte[] elevation = "; dwc:elevation \"".getBytes(UTF_8);
+	private static final byte[] elevationaccuracy = "; dwc:elevationAccuracy \"".getBytes(UTF_8);
+	private static final byte[] depth = "; dwc:depth \"".getBytes(UTF_8);
+	private static final byte[] depthaccuracy = "; dwc:depthaccuracy \"".getBytes(UTF_8);
+
+	private static final byte[] eventDate = "; dwc:eventDate \"".getBytes(UTF_8);
+	private static final byte[] day = "; dwc:day \"".getBytes(UTF_8);
+	private static final byte[] month = "; dwc:month \"".getBytes(UTF_8);
+	private static final byte[] year = "; dwc:year \"".getBytes(UTF_8);
+
+	private static final byte[] basisOfRecord = "; dwc:basisOfRecord \"".getBytes(UTF_8);
+	private static final byte[] institutioncode = "; dwc:institutionCode \"".getBytes(UTF_8);
+	private static final byte[] collectioncode = "; dwc:collectionCode \"".getBytes(UTF_8);
+	private static final byte[] catalognumber = "; dwc:catalogNumber \"".getBytes(UTF_8);
+	private static final byte[] recordnumber = "; dwc:recordNumber \"".getBytes(UTF_8);
+
+	private static final byte[] identifiedby = "; dwc:identifiedBy \"".getBytes(UTF_8);
+	private static final byte[] dateidentified = "; dwc:dateIdentified \"".getBytes(UTF_8);
+	private static final byte[] license = "; dwc:license <".getBytes(UTF_8);
+	private static final byte[] CC_BY_4_0 = "https://creativecommons.org/licenses/by/4.0/".getBytes(UTF_8);
+
+	private static final byte[] CC_BY_NC_4_0 = "https://creativecommons.org/licenses/by-nc/4.0/".getBytes(UTF_8);
+	private static final byte[] CC0_1_0 = "https://creativecommons.org/publicdomain/zero/1.0/".getBytes(UTF_8);
+
 	private void convertRows(RowReader rows, Map<KnownColumns, Integer> knownColumnsMap, OutputStream fos)
 			throws IOException {
 		byte[] buffer = new byte[BUFFER_SIZE];
 		int bufferUse = 0;
-		int gbifColumnId = knownColumnsMap.get(KnownColumns.gbifid);
-		int occurenceStatusId = knownColumnsMap.get(KnownColumns.occurrencestatus);
-		int individualCountId = knownColumnsMap.get(KnownColumns.individualcount);
-		int publishingorgkeyId = knownColumnsMap.get(KnownColumns.publishingorgkey);
-		int countryCodeId = knownColumnsMap.get(KnownColumns.countrycode);
-		int decimallatitudeId = knownColumnsMap.get(KnownColumns.decimallatitude);
-		int decimalLongitudeId = knownColumnsMap.get(KnownColumns.decimallongitude);
-		int coordinateUncertaintyInMetersId = knownColumnsMap.get(KnownColumns.coordinateuncertaintyinmeters);
-		int elevationId = knownColumnsMap.get(KnownColumns.elevation);
-		int elevationAccuracyId = knownColumnsMap.get(KnownColumns.elevationaccuracy);
-		int depthId = knownColumnsMap.get(KnownColumns.depth);
+		int gbifColumnId = getColumnId(knownColumnsMap, KnownColumns.gbifid);
+		int occurenceStatusId = getColumnId(knownColumnsMap, KnownColumns.occurrencestatus);
+		int individualCountId = getColumnId(knownColumnsMap, KnownColumns.individualcount);
+		int publishingorgkeyId = getColumnId(knownColumnsMap, KnownColumns.publishingorgkey);
+		int countryCodeId = getColumnId(knownColumnsMap, KnownColumns.countrycode);
+		int decimallatitudeId = getColumnId(knownColumnsMap, KnownColumns.decimallatitude);
+		int decimalLongitudeId = getColumnId(knownColumnsMap, KnownColumns.decimallongitude);
+		int coordinateUncertaintyInMetersId = getColumnId(knownColumnsMap, KnownColumns.coordinateuncertaintyinmeters);
+		int elevationId = getColumnId(knownColumnsMap, KnownColumns.elevation);
+		int elevationAccuracyId = getColumnId(knownColumnsMap, KnownColumns.elevationaccuracy);
+		int depthId = getColumnId(knownColumnsMap, KnownColumns.depth);
+		int depthAccuracyId = getColumnId(knownColumnsMap, KnownColumns.depth);
+		int eventdateId = getColumnId(knownColumnsMap, KnownColumns.eventdate);
+		int dayId = getColumnId(knownColumnsMap, KnownColumns.day);
+		int monthId = getColumnId(knownColumnsMap, KnownColumns.month);
+		int yearId = getColumnId(knownColumnsMap, KnownColumns.year);
+		int basisOfRecordId = getColumnId(knownColumnsMap, KnownColumns.basisofrecord);
+		int institutioncodeId = getColumnId(knownColumnsMap, KnownColumns.institutioncode);
+		int collectioncodeId = getColumnId(knownColumnsMap, KnownColumns.collectioncode);
+		int catalognumberId = getColumnId(knownColumnsMap, KnownColumns.catalognumber);
+		int recordnumberId = getColumnId(knownColumnsMap, KnownColumns.recordnumber);
+		int identifiedbyId = getColumnId(knownColumnsMap, KnownColumns.identifiedby);
+		int dateidentifiedId = getColumnId(knownColumnsMap, KnownColumns.dateidentified);
 		while (rows.hasNext()) {
 			rows.next();
 			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifColumnId);
@@ -91,31 +140,134 @@ public class OccurenceToRdf implements Callable<Integer> {
 			bufferUse = addAsRawString(rows, fos, buffer, bufferUse, publishingOrgKey, publishingorgkeyId);
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeId);
 			bufferUse = addCoordinates(rows, fos, buffer, bufferUse, decimallatitudeId, decimalLongitudeId,
-					coordinateUncertaintyInMetersId, elevationId, elevationAccuracyId, depthId);
-			bufferUse = add(buffer, endTripleBlock, fos, bufferUse);
+					coordinateUncertaintyInMetersId, elevationId, elevationAccuracyId, depthId, depthAccuracyId);
+			bufferUse = addDate(rows, fos, buffer, bufferUse, eventdateId, dayId, monthId, yearId);
+			bufferUse = andRecordData(rows, fos, buffer, bufferUse, basisOfRecordId, institutioncodeId,
+					collectioncodeId, catalognumberId, recordnumberId, identifiedbyId, dateidentifiedId);
+			bufferUse = addLicense(rows, fos, buffer, bufferUse, getColumnId(knownColumnsMap, KnownColumns.license));
+			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 		}
 		fos.write(buffer, 0, bufferUse);
 	}
 
+	private int addLicense(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int columnId)
+			throws IOException {
+		if (columnId < 0 || rows.isNull(columnId)) {
+			return bufferUse;
+		} else {
+			bufferUse = add(buffer, license, fos, bufferUse);
+			switch (rows.getString(columnId)) {
+			case "CC_BY_4_0":
+				bufferUse = add(buffer, CC_BY_4_0, fos, bufferUse);
+				break;
+			case "CC_BY_NC_4_0":
+				bufferUse = add(buffer, CC_BY_NC_4_0, fos, bufferUse);
+				break;
+			case "CC0_1_0":
+				bufferUse = add(buffer, CC0_1_0, fos, bufferUse);
+				break;
+			default:
+				throw new IOException("Unknown license: " + rows.getString(columnId));
+			}
+
+			bufferUse = add(buffer, rows.getString(columnId).getBytes(UTF_8), fos, bufferUse);
+			bufferUse = closeIri(buffer, fos, bufferUse);
+			return bufferUse;
+		}
+	}
+
+	private int getColumnId(Map<KnownColumns, Integer> knownColumnsMap, KnownColumns kc) {
+		return knownColumnsMap.getOrDefault(kc, -404);
+	}
+
+	private int andRecordData(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int basisOfRecordId,
+			int institutioncodeId, int collectioncodeId, int catalognumberId, int recordnumberId, int identifiedbyId,
+			int dateidentifiedId) throws IOException {
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, basisOfRecord, basisOfRecordId);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, institutioncode, institutioncodeId);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeId);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, catalognumber, catalognumberId);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordnumber, recordnumberId);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, identifiedby, identifiedbyId);
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, dateidentified, dateidentifiedId, XSD_DATE,
+				(s) -> fromTimestampToXsdDate(s, dateidentifiedId));
+		return bufferUse;
+	}
+
+	private static byte[] fromTimestampToXsdDate(StructAccessor s, int colId) {
+		Instant timestamp = s.getTimestamp(colId);
+		LocalDate localD = LocalDate.ofInstant(timestamp, ZoneOffset.UTC);
+		return DateTimeFormatter.ISO_LOCAL_DATE.format(localD).getBytes(UTF_8);
+	}
+
+	private int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int eventdateId, int dayId,
+			int monthId, int yearId) throws IOException {
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateId, XSD_DATE,
+				(s) -> fromTimestampToXsdDate(s, eventdateId));
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayId, XSD_GDAY, (s) -> {
+
+			int dc = s.getInt(dayId);
+			if (dc < 10) {
+				return ("---0" + dc).getBytes(UTF_8);
+			} else {
+				return ("---" + dc).getBytes(UTF_8);
+			}
+		});
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, month, monthId, XSD_GMONTH, (s) -> {
+			int monthInt = s.getInt(monthId);
+			if (monthInt < 10) {
+				return ("--0" + monthInt).getBytes(UTF_8);
+			} else {
+				return ("--" + monthInt).getBytes(UTF_8);
+			}
+		});
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, year, yearId, XSD_GYEAR, (s) -> {
+			return Integer.toString(s.getInt(yearId)).getBytes(UTF_8);
+		});
+		return bufferUse;
+	}
+
+	private int addAsDatatypeString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
+			int colId, byte[] datatype, Function<StructAccessor, byte[]> extractor) throws IOException {
+		if (colId < 0 || rows.isNull(colId)) {
+			return bufferUse;
+		} else {
+			bufferUse = add(buffer, predicate, fos, bufferUse);
+			bufferUse = add(buffer, extractor.apply(rows), fos, bufferUse);
+			bufferUse = add(buffer, datatype, fos, bufferUse);
+			return bufferUse;
+		}
+	}
+
 	private int addCoordinates(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int decimallatitudeId,
 			int decimalLongitudeId, int coordinateUncertaintyInMetersId, int elevationId, int elevationAccuracyId,
-			int depthId) throws IOException {
+			int depthId, int depthAccuracyId) throws IOException {
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, decimalLatitude, decimallatitudeId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, decimalLongitude, decimalLongitudeId);
-		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, coordinateUncertaintyInMeters, coordinateUncertaintyInMetersId);
+		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, coordinateUncertaintyInMeters,
+				coordinateUncertaintyInMetersId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, elevation, elevationId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, elevationaccuracy, elevationAccuracyId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depth, depthId);
+		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depthaccuracy, depthAccuracyId);
+		if (!rows.isNull(decimallatitudeId) && !rows.isNull(decimalLongitudeId)) {
+			bufferUse = add(buffer, POINT, fos, bufferUse);
+			bufferUse = add(buffer, Double.toString(rows.getDouble(decimalLongitudeId)).getBytes(UTF_8), fos,
+					bufferUse);
+			bufferUse = add(buffer, SPACE, fos, bufferUse);
+			bufferUse = add(buffer, Double.toString(rows.getDouble(decimallatitudeId)).getBytes(UTF_8), fos, bufferUse);
+			bufferUse = add(buffer, CLOSE_POINT, fos, bufferUse);
+
+		}
 		return bufferUse;
 	}
-	
+
 	private static final Logger log = Logger.getLogger(OccurenceToRdf.class.getName());
 	@Parameters(index = "0", description = "The bucket or directory containing the parquet files to convert")
 	public String bucketOrDirectory;
 
 	@Parameters(index = "1", description = "Where to writeto")
 	public File output;
-	
 
 	public static void main(String[] args) {
 		int exitCode = new CommandLine(new OccurenceToRdf()).execute(args);
@@ -189,10 +341,8 @@ public class OccurenceToRdf implements Callable<Integer> {
 		os.write(PREFIXES);
 	}
 
-	
-
-	private int addAsRawString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate, int colId)
-			throws IOException {
+	private int addAsRawString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
+			int colId) throws IOException {
 		if (rows.isNull(colId)) {
 			return bufferUse;
 		} else {
@@ -203,7 +353,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 
 	private int addAsLiteralString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
 			int colId) throws IOException {
-		if (rows.isNull(colId)) {
+		if (colId < 0 || rows.isNull(colId)) {
 			return bufferUse;
 		} else {
 			bufferUse = add(buffer, predicate, fos, bufferUse);
@@ -211,10 +361,10 @@ public class OccurenceToRdf implements Callable<Integer> {
 			return closeLiteral(buffer, fos, bufferUse);
 		}
 	}
-	
-	private int addAsDouble(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
-			int colId) throws IOException {
-		if (rows.isNull(colId)) {
+
+	private int addAsDouble(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate, int colId)
+			throws IOException {
+		if (colId < 0 || rows.isNull(colId)) {
 			return bufferUse;
 		} else {
 			bufferUse = add(buffer, predicate, fos, bufferUse);
@@ -244,15 +394,19 @@ public class OccurenceToRdf implements Callable<Integer> {
 	}
 
 	private int closeLiteral(byte[] buffer, OutputStream fos, int bufferUse) throws IOException {
-		return add(buffer, closeLiteral, fos, bufferUse);
+		return add(buffer, CLOSE_LITERAL, fos, bufferUse);
 	}
 	
+	private int closeIri(byte[] buffer, OutputStream fos, int bufferUse) throws IOException {
+		return add(buffer, CLOSE_IRI, fos, bufferUse);
+	}
+
 	private int closeDouble(byte[] buffer, OutputStream fos, int bufferUse) throws IOException {
 		return add(buffer, closeDoubleLiteral, fos, bufferUse);
 	}
 
-	private int addAsInteger(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
-			byte[] predicate, int individualCountId) throws IOException {
+	private int addAsInteger(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
+			int individualCountId) throws IOException {
 		if (!rows.isNull(individualCountId)) {
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			int int1 = rows.getInt(individualCountId);
