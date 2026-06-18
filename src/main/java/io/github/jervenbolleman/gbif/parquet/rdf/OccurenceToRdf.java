@@ -51,7 +51,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 	private static final byte[] XSD_GMONTH = "\"^^xsd:gMonth".getBytes(UTF_8);
 	private static final byte[] XSD_GYEAR = "\"^^xsd:gYear".getBytes(UTF_8);
 
-	private static final byte[] POINT = "; wdt:P625 \"Point(".getBytes(UTF_8);
+	private static final byte[] POINT = "wdt:P625 \"Point(".getBytes(UTF_8);
 	private static final byte[] SPACE = " ".getBytes(UTF_8);
 	private static final byte[] CLOSE_POINT = ")\"^^geo:wktLiteral ".getBytes(UTF_8);
 	private static final byte[] PREFIXES = """
@@ -77,61 +77,62 @@ public class OccurenceToRdf implements Callable<Integer> {
 	private static final byte[] END_TRIPLE_BLOCK = " .\n".getBytes(UTF_8);
 	private static final byte[] CLOSE_LITERAL = "\"".getBytes(UTF_8);
 	private static final String PRE = ";\n  ";
-	private static final byte[] subclassof = (PRE + "rdfs:subClassOf ").getBytes(UTF_8);
-	private static final byte[] countryCode = (PRE + "dwc:countryCode ").getBytes(UTF_8);
+	private static final byte[] PREB = PRE.getBytes(UTF_8);
+	private static final byte[] subclassof = ("rdfs:subClassOf ").getBytes(UTF_8);
+	private static final byte[] countryCode = ("dwc:countryCode ").getBytes(UTF_8);
 	private static final byte[] closeDoubleLiteral = "\"^^xsd:double ".getBytes(UTF_8);
 	private static final byte[] gbif = "gbif:".getBytes(UTF_8);
 	private static final byte[] gbifsp = "gbifsp:".getBytes(UTF_8);
 	private static final byte[] isOccurence = (" a dwc:Occurence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
-	private static final byte[] occurrenceStatus = (PRE + "dwc:occurrenceStatus ").getBytes(UTF_8);
-	private static final byte[] individualCount = (PRE + "dwc:individualCount ").getBytes(UTF_8);
-	private static final byte[] publishingOrgKey = (PRE + "dwc:publishingOrgKey gbifpub:").getBytes(UTF_8);
-	private static final byte[] decimalLatitude = (PRE + "dwc:decimalLatitude ").getBytes(UTF_8);
-	private static final byte[] decimalLongitude = (PRE + "dwc:decimalLongitude ").getBytes(UTF_8);
-	private static final byte[] coordinateUncertaintyInMeters = (PRE + "dwc:coordinateUncertaintyInMeters ")
+	private static final byte[] occurrenceStatus = ("dwc:occurrenceStatus ").getBytes(UTF_8);
+	private static final byte[] individualCount = ("dwc:individualCount ").getBytes(UTF_8);
+	private static final byte[] publishingOrgKey = ("dwc:publishingOrgKey gbifpub:").getBytes(UTF_8);
+	private static final byte[] decimalLatitude = ("dwc:decimalLatitude ").getBytes(UTF_8);
+	private static final byte[] decimalLongitude = ("dwc:decimalLongitude ").getBytes(UTF_8);
+	private static final byte[] coordinateUncertaintyInMeters = ("dwc:coordinateUncertaintyInMeters ")
 			.getBytes(UTF_8);
-	private static final byte[] elevation = (PRE + "dwc:elevation ").getBytes(UTF_8);
-	private static final byte[] elevationaccuracy = (PRE + "dwc:elevationAccuracy ").getBytes(UTF_8);
-	private static final byte[] depth = (PRE + "dwc:depth ").getBytes(UTF_8);
-	private static final byte[] depthaccuracy = (PRE + "dwc:depthaccuracy ").getBytes(UTF_8);
+	private static final byte[] elevation = ("dwc:elevation ").getBytes(UTF_8);
+	private static final byte[] elevationaccuracy = ("dwc:elevationAccuracy ").getBytes(UTF_8);
+	private static final byte[] depth = ("dwc:depth ").getBytes(UTF_8);
+	private static final byte[] depthaccuracy = ("dwc:depthaccuracy ").getBytes(UTF_8);
 
-	private static final byte[] eventDate = (PRE + "dwc:eventDate ").getBytes(UTF_8);
-	private static final byte[] day = (PRE + "dwc:day ").getBytes(UTF_8);
-	private static final byte[] month = (PRE + "dwc:month ").getBytes(UTF_8);
-	private static final byte[] year = (PRE + "dwc:year ").getBytes(UTF_8);
+	private static final byte[] eventDate = ("dwc:eventDate ").getBytes(UTF_8);
+	private static final byte[] day = ("dwc:day ").getBytes(UTF_8);
+	private static final byte[] month = ("dwc:month ").getBytes(UTF_8);
+	private static final byte[] year = ("dwc:year ").getBytes(UTF_8);
 
-	private static final byte[] basisOfRecord = (PRE + " dwc:basisOfRecord ").getBytes(UTF_8);
-	private static final byte[] institutioncode = (PRE + "dwc:institutionCode ").getBytes(UTF_8);
-	private static final byte[] collectioncode = (PRE + "dwc:collectionCode ").getBytes(UTF_8);
-	private static final byte[] catalognumber = (PRE + "dwc:catalogNumber ").getBytes(UTF_8);
-	private static final byte[] recordnumber = (PRE + " dwc:recordNumber ").getBytes(UTF_8);
+	private static final byte[] basisOfRecord = (" dwc:basisOfRecord ").getBytes(UTF_8);
+	private static final byte[] institutioncode = ("dwc:institutionCode ").getBytes(UTF_8);
+	private static final byte[] collectioncode = ("dwc:collectionCode ").getBytes(UTF_8);
+	private static final byte[] catalognumber = ("dwc:catalogNumber ").getBytes(UTF_8);
+	private static final byte[] recordnumber = (" dwc:recordNumber ").getBytes(UTF_8);
 
-	private static final byte[] identifiedby = (PRE + "dwc:identifiedBy ").getBytes(UTF_8);
-	private static final byte[] dateidentified = (PRE + "dwc:dateIdentified ").getBytes(UTF_8);
-	private static final byte[] license = (PRE + "dwc:license ").getBytes(UTF_8);
-	private static final byte[] rightsholder = (PRE + "dwc:rightsHolder ").getBytes(UTF_8);
-	private static final byte[] recordedby = (PRE + "dwc:recordedBy ").getBytes(UTF_8);
-	private static final byte[] typestatus = (PRE + "dwc:typeStatus ").getBytes(UTF_8);
-	private static final byte[] establishmentmeans = (PRE + "dwc:establishmentMeans ").getBytes(UTF_8);
-	private static final byte[] lastinterpreted = (PRE + "dwc:lastInterpreted ").getBytes(UTF_8);
-	private static final byte[] mediatype = (PRE + "dwc:mediaType ").getBytes(UTF_8);
-	private static final byte[] issue = (PRE + "dwc:issue ").getBytes(UTF_8);
-	private static final byte[] toTaxon = (PRE + "dwciri:toTaxon gbifsp:").getBytes(UTF_8);
+	private static final byte[] identifiedby = ("dwc:identifiedBy ").getBytes(UTF_8);
+	private static final byte[] dateidentified = ("dwc:dateIdentified ").getBytes(UTF_8);
+	private static final byte[] license = ("dwc:license ").getBytes(UTF_8);
+	private static final byte[] rightsholder = ("dwc:rightsHolder ").getBytes(UTF_8);
+	private static final byte[] recordedby = ("dwc:recordedBy ").getBytes(UTF_8);
+	private static final byte[] typestatus = ("dwc:typeStatus ").getBytes(UTF_8);
+	private static final byte[] establishmentmeans = ("dwc:establishmentMeans ").getBytes(UTF_8);
+	private static final byte[] lastinterpreted = ("dwc:lastInterpreted ").getBytes(UTF_8);
+	private static final byte[] mediatype = ("dwc:mediaType ").getBytes(UTF_8);
+	private static final byte[] issue = ("dwc:issue ").getBytes(UTF_8);
+	private static final byte[] toTaxon = ("dwciri:toTaxon gbifsp:").getBytes(UTF_8);
 
-	private static final byte[] kingdom = (PRE + "dwc:kingdom ").getBytes(UTF_8);
-	private static final byte[] phylum = (PRE + "dwc:phylum ").getBytes(UTF_8);
-	private static final byte[] clazz = (PRE + "dwc:class ").getBytes(UTF_8);
-	private static final byte[] order = (PRE + "dwc:order ").getBytes(UTF_8);
-	private static final byte[] family = (PRE + "dwc:family ").getBytes(UTF_8);
-	private static final byte[] genus = (PRE + "dwc:genus ").getBytes(UTF_8);
-	private static final byte[] taxonrank = (PRE + "dwc:taxonRank ").getBytes(UTF_8);
-	private static final byte[] species = (PRE + "dwc:species ").getBytes(UTF_8);
-	private static final byte[] infraspecificepithet = (PRE + "dwc:infraspecificEpithet ").getBytes(UTF_8);
+	private static final byte[] kingdom = ("dwc:kingdom ").getBytes(UTF_8);
+	private static final byte[] phylum = ("dwc:phylum ").getBytes(UTF_8);
+	private static final byte[] clazz = ("dwc:class ").getBytes(UTF_8);
+	private static final byte[] order = ("dwc:order ").getBytes(UTF_8);
+	private static final byte[] family = ("dwc:family ").getBytes(UTF_8);
+	private static final byte[] genus = ("dwc:genus ").getBytes(UTF_8);
+	private static final byte[] taxonrank = ("dwc:taxonRank ").getBytes(UTF_8);
+	private static final byte[] species = ("dwc:species ").getBytes(UTF_8);
+	private static final byte[] infraspecificepithet = ("dwc:infraspecificEpithet ").getBytes(UTF_8);
 	private static final byte[] inDescribedPlace = (" dwciri:inDescribedPlace ").getBytes(UTF_8);
-	private static final byte[] stateProvince = (PRE + "dwc:stateProvince ").getBytes(UTF_8);
-	private static final byte[] localityCode = (PRE + "dwc:locality ").getBytes(UTF_8);
+	private static final byte[] stateProvince = ("dwc:stateProvince ").getBytes(UTF_8);
+	private static final byte[] localityCode = ("dwc:locality ").getBytes(UTF_8);
 	
-	private static final byte[] verbatimscientificnameauthorship = (PRE + " dwc:verbatimScientificNameAuthorship ")
+	private static final byte[] verbatimscientificnameauthorship = (" dwc:verbatimScientificNameAuthorship ")
 			.getBytes(UTF_8);
 
 	private static final byte[] CC_BY_4_0 = "ccby4: ".getBytes(UTF_8);
@@ -261,12 +262,14 @@ public class OccurenceToRdf implements Callable<Integer> {
 		String species = null;
 		if (taxonkeyId < 0 || !rows.isNull(taxonkeyId)) {
 			taxon = rows.getString(taxonkeyId);
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, toTaxon, fos, bufferUse);
 			bufferUse = add(buffer, rows.getString(taxonkeyId).getBytes(UTF_8), fos, bufferUse);
 		}
 		if (speciesId < 0 || !rows.isNull(speciesId)) {
 			species = rows.getString(speciesId);
 			if (species != null && !species.equals(taxon)) {
+				bufferUse = add(buffer, PREB, fos, bufferUse);
 				bufferUse = add(buffer, toTaxon, fos, bufferUse);
 				bufferUse = add(buffer, rows.getString(taxonkeyId).getBytes(UTF_8), fos, bufferUse);
 			}
@@ -311,6 +314,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 							getColumnId(knownColumnsMap, KnownColumns.species), true);
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, infraspecificepithet,
 							getColumnId(knownColumnsMap, KnownColumns.infraspecificepithet), true);
+					bufferUse = add(buffer, PREB, fos, bufferUse);
 					bufferUse = add(buffer, subclassof, fos, bufferUse);
 					bufferUse = add(buffer, gbifsp, fos, bufferUse);
 				}
@@ -326,6 +330,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 		if (columnId < 0 || rows.isNull(columnId)) {
 			return bufferUse;
 		} else {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, license, fos, bufferUse);
 			switch (rows.getString(columnId)) {
 			case "CC_BY_4_0":
@@ -354,8 +359,8 @@ public class OccurenceToRdf implements Callable<Integer> {
 			int lastinterpretedId, int mediatypeId, int issueId) throws IOException {
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, basisOfRecord, basisOfRecordId, false);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, institutioncode, institutioncodeId, true);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeId, false);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, catalognumber, catalognumberId, false);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeId, true);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, catalognumber, catalognumberId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordnumber, recordnumberId, true);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, identifiedby,
 				KnownColumns.identifiedby.columnName(), true);
@@ -412,6 +417,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 		if (colId < 0 || rows.isNull(colId)) {
 			return bufferUse;
 		} else {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			bufferUse = add(buffer, OPEN_LITERAL, fos, bufferUse);
 			bufferUse = add(buffer, extractor.apply(rows), fos, bufferUse);
@@ -432,6 +438,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depth, depthId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depthaccuracy, depthAccuracyId);
 		if (!rows.isNull(decimallatitudeId) && !rows.isNull(decimalLongitudeId)) {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, POINT, fos, bufferUse);
 			bufferUse = add(buffer, Double.toString(rows.getDouble(decimalLongitudeId)).getBytes(UTF_8), fos,
 					bufferUse);
@@ -539,6 +546,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 		if (rows.isNull(colId)) {
 			return bufferUse;
 		} else {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			return add(buffer, rows.getString(colId).getBytes(UTF_8), fos, bufferUse);
 		}
@@ -549,6 +557,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 		if (colId < 0 || rows.isNull(colId)) {
 			return bufferUse;
 		} else {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
 			if (escape) {
@@ -567,6 +576,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			String colId, boolean escape) throws IOException {
 		PqList list = rows.getList(colId);
 		if (list != null && !list.isEmpty()) {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			for (Iterator<String> iterator = list.strings().iterator(); iterator.hasNext();) {
 				String li = iterator.next();
@@ -596,6 +606,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 		if (colId < 0 || rows.isNull(colId)) {
 			return bufferUse;
 		} else {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			bufferUse = add(buffer, OPEN_LITERAL, fos, bufferUse);
 			bufferUse = add(buffer, Double.toString(rows.getDouble(colId)).getBytes(UTF_8), fos, bufferUse);
@@ -609,7 +620,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 
 		byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
-
+		
 		bufferUse = add(buffer, isOccurence, fos, bufferUse);
 		bufferUse = add(buffer, OPEN_LITERAL, fos, bufferUse);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
@@ -628,6 +639,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 	private int addAsInteger(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
 			int individualCountId) throws IOException {
 		if (!rows.isNull(individualCountId)) {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			int int1 = rows.getInt(individualCountId);
 			bufferUse = add(buffer, int1, fos, bufferUse);
@@ -663,44 +675,6 @@ public class OccurenceToRdf implements Callable<Integer> {
 			if (kc != null) {
 				knownColumnsMap.put(kc, i);
 			}
-		}
-	}
-
-	private enum KnownColumns {
-		gbifid("gbifid"), datasetkey("datasetkey"), occurrenceid("occurrenceid"), kingdom("kingdom"), phylum("phylum"),
-		clazz("class"), order("order"), family("family"), genus("genus"), species("species"),
-		infraspecificepithet("infraspecificepithet"), taxonrank("taxonrank"), scientificname("scientificname"),
-		verbatimscientificname("verbatimscientificname"),
-		verbatimscientificnameauthorship("verbatimscientificnameauthorship"), countrycode("countrycode"),
-		locality("locality"), stateprovince("stateprovince"), occurrencestatus("occurrencestatus"),
-		individualcount("individualcount"), publishingorgkey("publishingorgkey"), decimallongitude("decimallongitude"),
-		decimallatitude("decimallatitude"), coordinateuncertaintyinmeters("coordinateuncertaintyinmeters"),
-		coordinateprecision("coordinateprecision"), elevation("elevation"), elevationaccuracy("elevationaccuracy"),
-		depth("depth"), depthaccuracy("depthaccuracy"), eventdate("eventdate"), day("day"), month("month"),
-		year("year"), taxonkey("taxonkey"), specieskey("specieskey"), basisofrecord("basisofrecord"),
-		institutioncode("institutioncode"), collectioncode("collectioncode"), catalognumber("catalognumber"),
-		recordnumber("recordnumber"), identifiedby("identifiedby"), dateidentified("dateidentified"),
-		license("license"), rightsholder("rightsholder"), recordedby("recordedby"), typestatus("typestatus"),
-		establishmentmeans("establishmentmeans"), lastinterpreted("lastinterpreted"), mediatype("mediatype"),
-		issue("issue");
-
-		private final String columnName;
-
-		KnownColumns(String columnName) {
-			this.columnName = columnName;
-		}
-
-		public static KnownColumns fromColumnName(String columnName) {
-			for (KnownColumns knownColumn : KnownColumns.values()) {
-				if (knownColumn.columnName.equalsIgnoreCase(columnName)) {
-					return knownColumn;
-				}
-			}
-			return null;
-		}
-
-		public String columnName() {
-			return columnName;
 		}
 	}
 }
