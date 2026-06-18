@@ -353,7 +353,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			int dateidentifiedId, int rightsholderId, int recordedbyId, int typestatusId, int establishmentmeansId,
 			int lastinterpretedId, int mediatypeId, int issueId) throws IOException {
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, basisOfRecord, basisOfRecordId, false);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, institutioncode, institutioncodeId, false);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, institutioncode, institutioncodeId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeId, false);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, catalognumber, catalognumberId, false);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordnumber, recordnumberId, true);
@@ -490,10 +490,15 @@ public class OccurenceToRdf implements Callable<Integer> {
 		}
 	}
 
-	private int convertFile(Path path1, Instant start, OutputStream fos) throws IOException {
+	private int convertFile(Path path1, Instant start, OutputStream fos) {
 		Map<KnownColumns, Integer> knownColumnsMap = new EnumMap<>(KnownColumns.class);
-		while (Files.isSymbolicLink(path1)) {
-			path1 = Files.readSymbolicLink(path1);
+		try {
+			while (Files.isSymbolicLink(path1)) {
+				path1 = Files.readSymbolicLink(path1);
+			}
+		} catch (IOException e) {
+			log.log(Level.SEVERE, "Error resolving symbolic link: " + path1, e);
+			return 4;
 		}
 		
 		try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(path1))) {
