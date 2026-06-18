@@ -490,9 +490,12 @@ public class OccurenceToRdf implements Callable<Integer> {
 		}
 	}
 
-	private int convertFile(Path path1, Instant start, OutputStream fos) {
+	private int convertFile(Path path1, Instant start, OutputStream fos) throws IOException {
 		Map<KnownColumns, Integer> knownColumnsMap = new EnumMap<>(KnownColumns.class);
-
+		while (Files.isSymbolicLink(path1)) {
+			path1 = Files.readSymbolicLink(path1);
+		}
+		
 		try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(path1))) {
 			Instant startFile = Instant.now();
 			FileSchema schema = reader.getFileSchema();
