@@ -16,6 +16,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Polygon;
+import org.locationtech.jts.util.GeometricShapeFactory;
 import org.roaringbitmap.buffer.MutableRoaringBitmap;
 
 import dev.hardwood.reader.RowReader;
@@ -31,8 +34,10 @@ public class RowToTurtle {
 	private static final byte[] XSD_GYEAR = "\"^^xsd:gYear".getBytes(UTF_8);
 
 	private static final byte[] POINT = "wdt:P625 \"Point(".getBytes(UTF_8);
+	private static final byte[] POLYGON = "wdt:P625 \"POLYGON((".getBytes(UTF_8);
 	private static final byte[] SPACE = " ".getBytes(UTF_8);
 	private static final byte[] CLOSE_POINT = ")\"^^geo:wktLiteral ".getBytes(UTF_8);
+	private static final byte[] CLOSE_POLYGON = "))\"^^geo:wktLiteral ".getBytes(UTF_8);
 	private static final byte[] END_TRIPLE_BLOCK = " .\n".getBytes(UTF_8);
 	private static final byte[] CLOSE_LITERAL = "\"".getBytes(UTF_8);
 	private static final String PRE = ";\n  ";
@@ -409,15 +414,50 @@ public class RowToTurtle {
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depth, depthId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depthaccuracy, depthAccuracyId);
 		if (!rows.isNull(decimallatitudeId) && !rows.isNull(decimalLongitudeId)) {
+			double longitude = rows.getDouble(decimalLongitudeId);
+			double latitude = rows.getDouble(decimallatitudeId);
 			bufferUse = add(buffer, PREB, fos, bufferUse);
-			bufferUse = add(buffer, POINT, fos, bufferUse);
-			bufferUse = add(buffer, Double.toString(rows.getDouble(decimalLongitudeId)).getBytes(UTF_8), fos,
-					bufferUse);
-			bufferUse = add(buffer, SPACE, fos, bufferUse);
-			bufferUse = add(buffer, Double.toString(rows.getDouble(decimallatitudeId)).getBytes(UTF_8), fos, bufferUse);
-			bufferUse = add(buffer, CLOSE_POINT, fos, bufferUse);
+			if (!rows.isNull(coordinateUncertaintyInMetersId)) {
+				double uncertaintity = rows.getDouble(decimallatitudeId);
+				bufferUse = addCircle(fos, buffer, bufferUse, longitude, latitude, uncertaintity);
+			} else {
+				bufferUse = addPoint(fos, buffer, bufferUse, longitude, latitude);
+			}
 
 		}
+		return bufferUse;
+	}
+
+	private static int addCircle(OutputStream fos, byte[] buffer, int bufferUse, double longitude, double latitude,
+			double uncertaintity) throws IOException {
+		bufferUse = add(buffer, POLYGON, fos, bufferUse);
+		GeometricShapeFactory shapeFactory = new GeometricShapeFactory();
+	    shapeFactory.setNumPoints(32);
+	    shapeFactory.setCentre(new Coordinate(longitude, latitude));
+	    shapeFactory.setSize(uncertaintity * 2);
+	    Polygon circle = shapeFactory.createCircle();
+		Coordinate[] coordinates = circle.getCoordinates();
+		for (int i = 0; i < coordinates.length; i++) {
+			Coordinate coordinate = coordinates[i];
+			bufferUse = add(buffer, Double.toString(coordinate.x).getBytes(UTF_8), fos, bufferUse);
+			bufferUse = add(buffer, SPACE, fos, bufferUse);
+			bufferUse = add(buffer, Double.toString(coordinate.y).getBytes(UTF_8), fos, bufferUse);
+			if (i < coordinates.length - 1) {
+				bufferUse = add(buffer, COMMA, fos, bufferUse);
+			}
+		}
+		bufferUse = add(buffer, CLOSE_POLYGON, fos, bufferUse);
+		return bufferUse;
+	}
+
+	private static int addPoint(OutputStream fos, byte[] buffer, int bufferUse, double longitude, double latitude)
+			throws IOException {
+		bufferUse = add(buffer, POINT, fos, bufferUse);
+		bufferUse = add(buffer, Double.toString(longitude).getBytes(UTF_8), fos,
+				bufferUse);
+		bufferUse = add(buffer, SPACE, fos, bufferUse);
+		bufferUse = add(buffer, Double.toString(latitude).getBytes(UTF_8), fos, bufferUse);
+		bufferUse = add(buffer, CLOSE_POINT, fos, bufferUse);
 		return bufferUse;
 	}
 
