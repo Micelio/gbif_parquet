@@ -221,14 +221,14 @@ public class RowToTurtle {
 			taxon = rows.getString(taxonkeyId);
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, toTaxon, fos, bufferUse);
-			bufferUse = add(buffer, rows.getString(taxonkeyId).getBytes(UTF_8), fos, bufferUse);
+			bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 		}
 		if (speciesId < 0 || !rows.isNull(speciesId)) {
 			species = rows.getString(speciesId);
 			if (species != null && !species.equals(taxon)) {
 				bufferUse = add(buffer, PREB, fos, bufferUse);
 				bufferUse = add(buffer, toTaxon, fos, bufferUse);
-				bufferUse = add(buffer, rows.getString(taxonkeyId).getBytes(UTF_8), fos, bufferUse);
+				bufferUse = add(buffer, species.getBytes(UTF_8), fos, bufferUse);
 			}
 		}
 		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
