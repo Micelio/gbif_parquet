@@ -28,6 +28,7 @@ import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 @Command(name = "occurence-to-rdf", description = "Convert GBIF occurrence parquet files to RDF")
@@ -55,12 +56,18 @@ public class OccurenceToRdf implements Callable<Integer> {
 
 	private static final Logger log = Logger.getLogger(OccurenceToRdf.class.getName());
 	
-	@Parameters(index = "0", description = "The bucket or directory containing the parquet files to convert")
-	public String bucketOrDirectory;
+	@Option(names = {"--year"}, description = "Year", required = true)
+	public String year;
 
-	@Parameters(index = "1", description = "Where to writeto")
-	public File output;
+	@Option(names = {"--month"}, description = "Month", required = true)
+	public String month;
+	
+	@Option(names = {"--output","-o"}, description = "Where to write to")
+	public File output = new File("/dev/stdout");
 
+	@Option(names= {"-d","--aws"}, description = "Retrieve read parquet files from AWS S3", defaultValue = "false")
+	public boolean useS3 = false;
+	
 	public static void main(String[] args) {
 		int exitCode = new CommandLine(new OccurenceToRdf()).execute(args);
 		System.exit(exitCode);
@@ -68,21 +75,24 @@ public class OccurenceToRdf implements Callable<Integer> {
 
 	@Override
 	public Integer call() throws Exception { // your business logic goes here...
-		if (bucketOrDirectory == null || bucketOrDirectory.isEmpty()) {
-			log.log(Level.SEVERE, "Please provide a bucket or directory containing the parquet files to convert");
+		if (year == null || year.isEmpty() || Integer.parseInt(year) < 2000 || Integer.parseInt(year) > 2100) {
+			log.log(Level.SEVERE, "Year value is missing or invalid");
 			return 1;
 		}
-		if (bucketOrDirectory.startsWith("s3://")) {
-			log.log(Level.INFO, "Using S3 bucket: " + bucketOrDirectory);
+		if (month == null || month.isEmpty() || Integer.parseInt(month) < 0 || Integer.parseInt(month) > 12) {
+			log.log(Level.SEVERE, "Month value is missing or invalid");
+			return 1;
+		}
+		if (useS3) {
+			log.log(Level.SEVERE, "Using S3 bucket: but that is not implemented yet");
+			return -1;
 		} else {
 			return convertFiles();
 		}
-
-		return 0;
 	}
 
 	private int convertFiles() {
-		try (Stream<Path> list = Files.list(Path.of(bucketOrDirectory));
+		try (Stream<Path> list = Files.list(Path.of("./"+year+"/"+month));
 				OutputStream fos = new FileOutputStream(output)) {
 			printPrefixes(fos);
 
