@@ -141,11 +141,11 @@ public enum AwsOpenDataLocations {
 		Path fp = ym.resolve(Paths.get(file).getFileName());
 		log.log(Level.INFO, "Downloading: " + file + " into " + fp);
 		long at = 0;
+		Path tempFile = Files.createTempFile(ym, "temp", "parquet");
 		if (Files.exists(fp)) {
 			at = Files.size(fp);
 		}
 		HttpRequest.Builder rb = HttpRequest.newBuilder().uri(URI.create(asHttpPrefix() + file));
-		Path tempFile = Files.createTempFile(ym, "temp", "parquet");
 		BodyHandler<Path> handler = BodyHandlers.ofFile(tempFile, StandardOpenOption.APPEND,
 				StandardOpenOption.CREATE);
 		if (at > 0) {
@@ -158,6 +158,7 @@ public enum AwsOpenDataLocations {
 			return fp;
 		} else if (response.statusCode() == 416) {
 			log.log(Level.INFO, "File already fully downloaded: " + file);
+			Files.delete(tempFile);
 			return fp;
 		} else if (response.statusCode() == 206) {
 			log.log(Level.INFO, "File already partly downloaded: " + file);

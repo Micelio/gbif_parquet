@@ -1,0 +1,28 @@
+[
+  {
+    "name" : "io.github.jervenbolleman.gbif.parquet.rdf.OccurencesToRdf",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "month" },
+      { "name" : "output" },
+      { "name" : "s3secret" },
+      { "name" : "s3user" },
+      { "name" : "useS3" },
+      { "name" : "year" }
+    ]
+  },
+  {
+    "name": "org.xerial.snappy.Snappy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.xerial.snappy.SnappyLoader",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  }
+]
