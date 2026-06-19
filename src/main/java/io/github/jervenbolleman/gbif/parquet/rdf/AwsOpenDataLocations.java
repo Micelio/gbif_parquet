@@ -128,13 +128,13 @@ public enum AwsOpenDataLocations {
 		Files.createDirectories(ym);
 		HttpClient client = HttpClient.newHttpClient();
 
-		return files.stream().map(file -> {
+		return files.stream().parallel().map(file -> {
 			try {
 				return downloadFile(ym, client, file);
 			} catch (IOException | InterruptedException e) {
 				throw new RuntimeException(e);
 			}
-		}).parallel().onClose(() -> client.close());
+		}).onClose(() -> client.close()).sequential();
 	}
 
 	private Path downloadFile(Path ym, HttpClient client, String file) throws IOException, InterruptedException {
