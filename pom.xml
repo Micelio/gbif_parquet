@@ -111,6 +111,9 @@
 							<imageName>OccurencesToRdf</imageName>
 							<buildArgs>
 								<buildArg>--gc=G1</buildArg>
+								<buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
+								<buildArg>-H:+VectorAPISupport</buildArg>
+								<buildArg>--add-modules jdk.incubator.vector</buildArg>
 								<buildArg>--initialize-at-run-time=org.xerial.snappy.SnappyLoader,org.xerial.snappy.Snappy</buildArg>
 							</buildArgs>
 							<mainClass>${mainClass}</mainClass>
@@ -210,6 +213,10 @@
 				<configuration>
 					<release>25</release>
 					<verbose>true</verbose>
+					<compilerArgs>
+						<arg>--add-modules</arg>
+						<arg>jdk.incubator.vector</arg>
+					</compilerArgs>
 				</configuration>
 			</plugin>
 			<plugin>
