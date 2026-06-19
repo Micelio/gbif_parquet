@@ -6,6 +6,13 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpResponse.BodyHandler;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
@@ -23,6 +30,7 @@ import java.util.stream.Stream;
 import dev.hardwood.InputFile;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
+import dev.hardwood.s3.S3Source;
 import dev.hardwood.schema.ColumnProjection;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
@@ -34,7 +42,6 @@ import picocli.CommandLine.Parameters;
 @Command(name = "occurence-to-rdf", description = "Convert GBIF occurrence parquet files to RDF")
 public class OccurenceToRdf implements Callable<Integer> {
 
-	
 	private static final byte[] PREFIXES = """
 				PREFIX gbifid:<https://www.gbif.org/occurrence/>
 			PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
@@ -55,19 +62,19 @@ public class OccurenceToRdf implements Callable<Integer> {
 				""".getBytes(UTF_8);
 
 	private static final Logger log = Logger.getLogger(OccurenceToRdf.class.getName());
-	
-	@Option(names = {"--year"}, description = "Year", required = true)
+
+	@Option(names = { "--year" }, description = "Year", required = true)
 	public String year;
 
-	@Option(names = {"--month"}, description = "Month", required = true)
+	@Option(names = { "--month" }, description = "Month", required = true)
 	public String month;
-	
-	@Option(names = {"--output","-o"}, description = "Where to write to")
+
+	@Option(names = { "--output", "-o" }, description = "Where to write to")
 	public File output = new File("/dev/stdout");
 
-	@Option(names= {"-d","--aws"}, description = "Retrieve read parquet files from AWS S3", defaultValue = "false")
+	@Option(names = { "-d", "--aws" }, description = "Retrieve read parquet files from AWS S3", defaultValue = "false")
 	public boolean useS3 = false;
-	
+
 	public static void main(String[] args) {
 		int exitCode = new CommandLine(new OccurenceToRdf()).execute(args);
 		System.exit(exitCode);
@@ -84,16 +91,48 @@ public class OccurenceToRdf implements Callable<Integer> {
 			return 1;
 		}
 		if (useS3) {
+			AwsOpenDataLocations closestS3Location = findClosestS3Location();
+			log.log(Level.INFO, "Closest S3 location: " + closestS3Location.getLocation());
 			log.log(Level.SEVERE, "Using S3 bucket: but that is not implemented yet");
+			
 			return -1;
 		} else {
-			return convertFiles();
+			try (Stream<Path> list = Files.list(Path.of("./" + year + "/" + month))) {
+				return convertFiles(list);
+			} catch (IOException e) {
+				return 1;
+			}
 		}
 	}
 
-	private int convertFiles() {
-		try (Stream<Path> list = Files.list(Path.of("./"+year+"/"+month));
-				OutputStream fos = new FileOutputStream(output)) {
+	private AwsOpenDataLocations findClosestS3Location() throws URISyntaxException, IOException, InterruptedException {
+		AwsOpenDataLocations closestLocation = AwsOpenDataLocations.US_EAST_1; // default to US_EAST_1 if all fail
+		Map<AwsOpenDataLocations, Long> timeToFetch = new EnumMap<>(AwsOpenDataLocations.class);
+		try (HttpClient client = HttpClient.newBuilder().build()) {
+
+			for (AwsOpenDataLocations location : AwsOpenDataLocations.values()) {
+				Instant start = Instant.now();
+				HttpRequest hr = HttpRequest.newBuilder(new URI(location.asHttpPrefix() + year + "/" + month + "/"))
+						.HEAD().build();
+				HttpResponse<Void> send = client.send(hr, BodyHandlers.discarding());
+				Instant end = Instant.now();
+				if (send.statusCode() == 200) {
+					timeToFetch.put(location, Duration.between(start, end).getSeconds());
+				}
+			}
+		}
+		long fastestTime = Long.MAX_VALUE;
+		for (Map.Entry<AwsOpenDataLocations, Long> entry : timeToFetch.entrySet()) {
+			if (entry.getValue() < fastestTime) {
+				fastestTime = entry.getValue();
+				closestLocation = entry.getKey();
+			}
+		}
+		return closestLocation;
+	}
+
+	private int convertFiles(Stream<Path> list) {
+		try (OutputStream fos = new FileOutputStream(output)) {
 			printPrefixes(fos);
 
 			Instant start = Instant.now();
@@ -120,7 +159,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			log.log(Level.SEVERE, "Error resolving symbolic link: " + path1, e);
 			return 4;
 		}
-		
+
 		try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(path1))) {
 			Instant startFile = Instant.now();
 			FileSchema schema = reader.getFileSchema();
@@ -153,7 +192,6 @@ public class OccurenceToRdf implements Callable<Integer> {
 
 		os.write(PREFIXES);
 	}
-
 
 	private void mapKnownColumnsToIds(Map<KnownColumns, Integer> knownColumnsMap, FileSchema schema) {
 		for (int i = 0; i < schema.getColumnCount(); i++) {
