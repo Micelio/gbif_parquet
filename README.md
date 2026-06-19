@@ -4,11 +4,19 @@
 To convert GBIF occurences into turlte
 
 ```
-mvn package
+mvn package -Puber
 java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED -jar target/gbif_parquet-0.3.0-SNAPSHOT-jar-with-dependencies.jar --year 2026 --month 01 --aws --output /dev/stdout
 ```
 Although the two options `--enable-native-access=ALL-UNNAMED` and `--add-modules jdk.incubator.vector` are optional.
 The option `--aws` downloads the files from AWS OpenData if they are not locally present yet.
+
+There is also an option to build a native executable using graal vm
+This requires a locally set up graal vm.
+
+```
+mvn package -Pnative
+./target/OccurencesToRdf --year 2026 --month 02 --aws --output /dev/stdout
+```
 
 
 # Issues

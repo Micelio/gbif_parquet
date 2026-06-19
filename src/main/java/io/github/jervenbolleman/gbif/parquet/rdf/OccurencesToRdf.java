@@ -18,16 +18,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.PrimitiveIterator.OfInt;
 import java.util.concurrent.Callable;
-
 import java.util.stream.Stream;
 
 import dev.hardwood.InputFile;
-import dev.hardwood.metadata.LogicalType;
 import dev.hardwood.metadata.PhysicalType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
-import dev.hardwood.s3.S3Credentials;
-import dev.hardwood.s3.S3Source;
 import dev.hardwood.schema.ColumnProjection;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
@@ -35,11 +31,11 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-@Command(name = "occurence-to-rdf", description = "Convert GBIF occurrence parquet files to RDF")
-public class OccurenceToRdf implements Callable<Integer> {
+@Command(name = "occurences-to-rdf", description = "Convert GBIF occurrence parquet files to RDF")
+public class OccurencesToRdf implements Callable<Integer> {
 
 	private static final byte[] PREFIXES = """
-				PREFIX gbifid:<https://www.gbif.org/occurrence/>
+			PREFIX gbifid:<https://www.gbif.org/occurrence/>
 			PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 			PREFIX gbif: <https://www.gbif.org/occurrence/>
 			PREFIX gbifterm: <http://rs.gbif.org/terms/1.0/>
@@ -57,7 +53,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 				""".getBytes(UTF_8);
 
-	private static final  System.Logger log =  System.getLogger(OccurenceToRdf.class.getName());
+	private static final  System.Logger log =  System.getLogger(OccurencesToRdf.class.getName());
 
 	@Option(names = { "--year" }, description = "Year", required = true)
 	public String year;
@@ -78,12 +74,12 @@ public class OccurenceToRdf implements Callable<Integer> {
 	public boolean useS3 = false;
 
 	public static void main(String[] args) {
-		int exitCode = new CommandLine(new OccurenceToRdf()).execute(args);
+		int exitCode = new CommandLine(new OccurencesToRdf()).execute(args);
 		System.exit(exitCode);
 	}
 
 	@Override
-	public Integer call() throws Exception { // your business logic goes here...
+	public Integer call() throws Exception {
 		if (year == null || year.isEmpty() || Integer.parseInt(year) < 2000 || Integer.parseInt(year) > 2100) {
 			log.log(Level.ERROR, "Year value is missing or invalid");
 			return 1;
