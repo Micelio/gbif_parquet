@@ -20,6 +20,6 @@ Although the two options `--enable-native-access=ALL-UNNAMED` and `--add-modules
 
 TODO:
 
-1. Use ping to figure out which AWS location is closest and download/stream from there
-2. Scripts assume local relative paths
-3. No streaming from S3 directly yet.
+1. Scripts assume local relative paths
+2. No streaming from S3 directly yet.
+3. Occurences snapshots before 2024/02 are not readable (due to schema changes in the parquet files).
