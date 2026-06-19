@@ -1,29 +1,25 @@
 # gbif_parquet to rdf/turtle
 
-To convert a whole GBIF Snapshot into rdf. This will currently stream parquet from aws eu-west.
 
-```bash
-/ontop_convert_all.sh ${year} ${month} > big_turtle_file.ttl
-```
-e.g.
-```bash
-# validate there are no errors in the generated turtle and count the raw triples
-/ontop_convert_all.sh 2026 01 | pv | riot --validate --syntax turtle --count
-```
-
-To first download the parquet files locally
+To first download the parquet files locally (currently from eu-west)"
 
 ```bash
  ./download_gbif.sh ${year} ${month}
 ```
+
+Then convert into ttl.
+
+```
+mvn package
+java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED -jar target/gbif_parquet-0.3.0-SNAPSHOT-jar-with-dependencies.jar --year 2026 --month 01 --output /dev/stdout
+```
+Although the two options `--enable-native-access=ALL-UNNAMED` and `--add-modules jdk.incubator.vector` are optional.
 
 
 # Issues
 
 TODO:
 
-1. Mapping is done via rml defined in occurrence-rml.ttl. This is not optimal and help from a gbif/darwin core expert is very welcome
-2. GBIFIDs are not unique in the parquet files, can't create unique index to help improve rdf generation speed
-3. This is slower than it needs to be (ontop materialize 5.6.0 will improve this a lot)
-4. Use ping to figure out which AWS location is closest and download/stream from there
-5. Scripts assume local relative paths
+1. Scripts assume local relative paths
+2. No streaming from S3 directly yet.
+3. Occurences snapshots before 2024/02 are not readable (due to schema changes in the parquet files).
