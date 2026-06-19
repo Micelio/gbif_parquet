@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.PrimitiveIterator.OfInt;
 import java.util.concurrent.Callable;
@@ -92,11 +93,15 @@ public class OccurenceToRdf implements Callable<Integer> {
 		if (useS3) {
 			AwsOpenDataLocations closestS3Location = AwsOpenDataLocations.findClosestS3Location();
 			log.log(Level.INFO, "Closest S3 location: " + closestS3Location.getLocation());
-			log.log(Level.ERROR, "Using S3 bucket: but that is not implemented yet");
+			log.log(Level.ERROR, "Would like to use streaming from S3 bucket: but that is not implemented yet");
 			log.log(Level.ERROR, "Check https://github.com/hardwood-hq/hardwood/issues/519");
-			log.log(Level.INFO, "Would parse " +closestS3Location.list(year, month).size() + " files");
-			
-			return -1;
+			List<String> files = closestS3Location.list(year, month);
+			log.log(Level.INFO, "Would parse " +files.size() + " files");
+			try (Stream<Path> list =closestS3Location.download(files, year, month)){
+				return convertFiles(list);
+			} catch (IOException e) {
+				return 1;
+			}
 		} else {
 			try (Stream<Path> list = Files.list(Path.of("./" + year + "/" + month))) {
 				return convertFiles(list);
