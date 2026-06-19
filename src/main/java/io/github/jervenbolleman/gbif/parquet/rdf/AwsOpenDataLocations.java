@@ -1,5 +1,9 @@
 package io.github.jervenbolleman.gbif.parquet.rdf;
 
+import static java.net.URLEncoder.encode;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.net.URI;
@@ -10,9 +14,18 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 public enum AwsOpenDataLocations {
 
@@ -38,17 +51,18 @@ public enum AwsOpenDataLocations {
 		AwsOpenDataLocations closestLocation = US_EAST_1; // default to US_EAST_1 if all fail
 		Map<AwsOpenDataLocations, Long> timeToFetch = new EnumMap<>(AwsOpenDataLocations.class);
 		try (HttpClient client = HttpClient.newBuilder().build()) {
-	
+
 			for (AwsOpenDataLocations location : values()) {
 				Instant start = Instant.now();
-				HttpRequest hr = HttpRequest.newBuilder(new URI(location.asHttpPrefix()+"index.html#"))
-						.HEAD().build();
+				HttpRequest hr = HttpRequest.newBuilder(new URI(location.asHttpPrefix() + "index.html#")).HEAD()
+						.build();
 				HttpResponse<Void> send = client.send(hr, BodyHandlers.discarding());
 				Instant end = Instant.now();
 				if (send.statusCode() == 200) {
 					timeToFetch.put(location, Duration.between(start, end).getSeconds());
 				} else {
-					log.log(Level.INFO, "location"+ location.asHttpPrefix() + " returned status code " + send.statusCode());
+					log.log(Level.INFO,
+							"location " + location.asHttpPrefix() + " returned status code " + send.statusCode());
 				}
 			}
 		}
@@ -60,5 +74,68 @@ public enum AwsOpenDataLocations {
 			}
 		}
 		return closestLocation;
+	}
+
+	List<String> list(String year, String month) throws IOException, InterruptedException {
+		List<String> files = new ArrayList<>();
+		try (HttpClient client = HttpClient.newBuilder().build()) {
+			String continuationToken = "";
+
+			while (continuationToken != null) {
+				continuationToken = listRequest(year, month, files, client, continuationToken);
+			}
+
+		} catch (URISyntaxException e) {
+			log.log(Level.ERROR, e);
+		} catch (ParserConfigurationException e) {
+			throw new IOException("Error configuring XML parser", e);
+		} catch (SAXException e) {
+			throw new IOException("Error XML parsing", e);
+		}
+		return files;
+	}
+
+	private String listRequest(String year, String month, List<String> files, HttpClient client,
+			String continuationToken)
+			throws URISyntaxException, IOException, InterruptedException, ParserConfigurationException, SAXException {
+		String formParams = "?list-type=2&delimiter=" + encode("/", UTF_8) + "&prefix="
+				+ encode("occurrence/" + year + "-" + month + "-01/occurrence.parquet/", UTF_8);
+		if (continuationToken != null && !continuationToken.isEmpty()) {
+			formParams += "&continuation-token=" + encode(continuationToken, UTF_8);
+		}
+		HttpRequest hr = HttpRequest.newBuilder(new URI(asHttpPrefix() + formParams)).GET()
+//						.header("Content-Type", "application/x-www-form-urlencoded")
+				.build();
+		HttpResponse<String> send = client.send(hr, BodyHandlers.ofString());
+		if (send.statusCode() == 200) {
+			return parseDocument(send.body(), files);
+		} else {
+			log.log(Level.INFO, "location " + asHttpPrefix() + " returned status code " + send.statusCode());
+			return null;
+		}
+	}
+
+	static String parseDocument(String send, List<String> files)
+			throws ParserConfigurationException, SAXException, IOException {
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		DocumentBuilder dBuilder = factory.newDocumentBuilder();
+		try (ByteArrayInputStream input = new ByteArrayInputStream(send.getBytes(UTF_8))) {
+			Document doc = dBuilder.parse(input);
+
+			doc.getDocumentElement().normalize();
+			NodeList keys = doc.getElementsByTagName("Key");
+			for (int i = 0; i < keys.getLength(); i++) {
+				files.add(keys.item(i).getTextContent());
+			}
+			NodeList nct = doc.getElementsByTagName("NextContinuationToken");
+			if (nct.getLength() > 0) {
+				String nextContinuationToken = nct.item(0).getTextContent();
+				log.log(Level.INFO, "NextContinuationToken: " + nextContinuationToken);
+				return nextContinuationToken;
+			} else {
+				return null;
+			}
+		}
+
 	}
 }

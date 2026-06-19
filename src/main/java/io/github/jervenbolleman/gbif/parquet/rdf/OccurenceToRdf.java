@@ -94,7 +94,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			log.log(Level.INFO, "Closest S3 location: " + closestS3Location.getLocation());
 			log.log(Level.ERROR, "Using S3 bucket: but that is not implemented yet");
 			log.log(Level.ERROR, "Check https://github.com/hardwood-hq/hardwood/issues/519");
-			
+			log.log(Level.INFO, "Would parse " +closestS3Location.list(year, month).size() + " files");
 			
 			return -1;
 		} else {
