@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.Map;
@@ -98,7 +99,7 @@ public class RowToTurtle {
 	private static final byte[] CC0_1_0 = "cc0: ".getBytes(UTF_8);
 	private static final int BUFFER_SIZE = 16 * 8096;
 
-	static void convertRows(RowReader rows, Map<KnownColumns, Integer> knownColumnsMap, OutputStream fos)
+	static void convertRows(RowReader rows, Map<KnownColumns, Integer> knownColumnsMap, OutputStream fos, boolean taxonIsInt, boolean gbifidIsLong)
 			throws IOException, NoSuchAlgorithmException {
 		byte[] buffer = new byte[BUFFER_SIZE];
 		int bufferUse = 0;
@@ -138,7 +139,7 @@ public class RowToTurtle {
 		MessageDigest md = MessageDigest.getInstance("SHA-256");
 		while (rows.hasNext()) {
 			rows.next();
-			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifColumnId);
+			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifColumnId, gbifidIsLong);
 
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, occurrenceStatus, occurenceStatusId, false);
 			bufferUse = addAsInteger(rows, fos, buffer, bufferUse, individualCount, individualCountId);
@@ -152,7 +153,7 @@ public class RowToTurtle {
 					recordedbyId, typestatus, establishmentmeans, lastinterpreted, mediatype, issue);
 			bufferUse = addLicense(rows, fos, buffer, bufferUse, getColumnId(knownColumnsMap, KnownColumns.license));
 
-			bufferUse = addTaxon(rows, fos, buffer, bufferUse, taxonkeyId, speciesId, seenTaxons, knownColumnsMap);
+			bufferUse = addTaxon(rows, fos, buffer, bufferUse, taxonkeyId, speciesId, seenTaxons, knownColumnsMap, taxonIsInt);
 			bufferUse = addLocation(rows, fos, buffer, bufferUse, gbifColumnId, knownColumnsMap, md);
 		}
 		fos.write(buffer, 0, bufferUse);
@@ -213,18 +214,24 @@ public class RowToTurtle {
 	}
 
 	private static int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int taxonkeyId,
-			int speciesId, MutableRoaringBitmap seenTaxons, Map<KnownColumns, Integer> knownColumnsMap)
+			int speciesId, MutableRoaringBitmap seenTaxons, Map<KnownColumns, Integer> knownColumnsMap, boolean taxonIsInt)
 			throws IOException {
 		String taxon = null;
 		String species = null;
 		if (taxonkeyId < 0 || !rows.isNull(taxonkeyId)) {
-			taxon = rows.getString(taxonkeyId);
+			if (taxonIsInt)
+				taxon = Integer.toString(rows.getInt(taxonkeyId));
+			else
+				taxon = rows.getString(taxonkeyId);
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, toTaxon, fos, bufferUse);
 			bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 		}
 		if (speciesId < 0 || !rows.isNull(speciesId)) {
-			species = rows.getString(speciesId);
+			if (taxonIsInt)
+				species = Integer.toString(rows.getInt(speciesId));
+			else
+				species = rows.getString(speciesId);
 			if (species != null && !species.equals(taxon)) {
 				bufferUse = add(buffer, PREB, fos, bufferUse);
 				bufferUse = add(buffer, toTaxon, fos, bufferUse);
@@ -341,6 +348,10 @@ public class RowToTurtle {
 		LocalDate localD = LocalDate.ofInstant(timestamp, ZoneOffset.UTC);
 		return DateTimeFormatter.ISO_LOCAL_DATE.format(localD).getBytes(UTF_8);
 	}
+	
+	private static byte[] fromVarCharToXsdDate(StructAccessor s, int eventdateId) {
+		return Arrays.copyOf(s.getBinary(eventdateId), 10);
+	}
 
 	private static int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int eventdateId,
 			int dayId, int monthId, int yearId) throws IOException {
@@ -368,6 +379,8 @@ public class RowToTurtle {
 		});
 		return bufferUse;
 	}
+
+	
 
 	private static int addAsDatatypeString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
 			byte[] predicate, int colId, byte[] datatype, Function<StructAccessor, byte[]> extractor)
@@ -481,11 +494,16 @@ public class RowToTurtle {
 		}
 	}
 
-	private static int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId)
+	private static int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId, boolean gbifidIsLong)
 			throws IOException {
 		bufferUse = add(buffer, gbif, fos, bufferUse);
 
-		byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
+		byte[] gbifid;
+		if (gbifidIsLong) {
+			gbifid = Long.toString(rows.getLong(gbifColumnId)).getBytes(UTF_8);
+		} else {
+			gbifid = rows.getBinary(gbifColumnId);
+		}
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
 
 		bufferUse = add(buffer, isOccurence, fos, bufferUse);

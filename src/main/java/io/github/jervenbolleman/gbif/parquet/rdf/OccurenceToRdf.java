@@ -22,6 +22,8 @@ import java.util.concurrent.Callable;
 import java.util.stream.Stream;
 
 import dev.hardwood.InputFile;
+import dev.hardwood.metadata.LogicalType;
+import dev.hardwood.metadata.PhysicalType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.s3.S3Credentials;
@@ -97,7 +99,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			log.log(Level.ERROR, "Check https://github.com/hardwood-hq/hardwood/issues/519");
 			List<String> files = closestS3Location.list(year, month);
 			log.log(Level.INFO, "Would parse " +files.size() + " files");
-			try (Stream<Path> list =closestS3Location.download(files, year, month)){
+			try (Stream<Path> list = closestS3Location.download(files, year, month)){
 				return convertFiles(list);
 			} catch (IOException e) {
 				return 1;
@@ -149,7 +151,10 @@ public class OccurenceToRdf implements Callable<Integer> {
 							Arrays.stream(KnownColumns.values()).map(KnownColumns::columnName).toArray(String[]::new)))
 					.build();
 
-			RowToTurtle.convertRows(rows, knownColumnsMap, fos);
+			
+			boolean gbifid = schema.getColumn(KnownColumns.gbifid.columnName()).type() == PhysicalType.INT64;
+			boolean taxonIsInt = schema.getColumn(KnownColumns.taxonkey.columnName()).type() == PhysicalType.INT32;
+			RowToTurtle.convertRows(rows, knownColumnsMap, fos, taxonIsInt, gbifid);
 			logTime(path1, start, startFile);
 		} catch (IOException e) {
 			log.log(Level.ERROR, "Error reading file: " + path1, e);

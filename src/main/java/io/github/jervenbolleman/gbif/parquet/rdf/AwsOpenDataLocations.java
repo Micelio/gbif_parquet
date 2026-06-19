@@ -5,16 +5,21 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.System.Logger.Level;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpResponse.BodyHandler;
 import java.net.http.HttpResponse.BodyHandlers;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
@@ -108,9 +113,7 @@ public enum AwsOpenDataLocations {
 		if (continuationToken != null && !continuationToken.isEmpty()) {
 			formParams += "&continuation-token=" + encode(continuationToken, UTF_8);
 		}
-		HttpRequest hr = HttpRequest.newBuilder(new URI(asHttpPrefix() + formParams)).GET()
-//						.header("Content-Type", "application/x-www-form-urlencoded")
-				.build();
+		HttpRequest hr = HttpRequest.newBuilder(new URI(asHttpPrefix() + formParams)).GET().build();
 		HttpResponse<String> send = client.send(hr, BodyHandlers.ofString());
 		if (send.statusCode() == 200) {
 			return parseDocument(send.body(), files);
@@ -121,39 +124,53 @@ public enum AwsOpenDataLocations {
 	}
 
 	Stream<Path> download(List<String> files, String year, String month) throws IOException, InterruptedException {
-		List<Path> downloadedFiles = new ArrayList<>();
 		Path ym = Paths.get("./" + year + '/' + month);
 		Files.createDirectories(ym);
-		try (HttpClient client = HttpClient.newHttpClient()) {
-			for (String file : files) {
+		HttpClient client = HttpClient.newHttpClient();
 
-				Path fp = ym.resolve(Paths.get(file).getFileName());
-				log.log(Level.INFO, "Downloading: " + file + " into " + fp);
-				long at = 0;
-				if (Files.exists(fp)) {
-					at = Files.size(fp);
-				}
-				HttpRequest.Builder rb = HttpRequest.newBuilder().uri(URI.create(asHttpPrefix() + file));
-				if (at > 0) {
-					rb.header("Range", "bytes=" + at + "-");
-				}
-				HttpResponse<Path> response = client.send(rb.build(),
-						BodyHandlers.ofFile(fp, StandardOpenOption.APPEND, StandardOpenOption.CREATE));
-
-				if (response.statusCode() == 200) {
-					downloadedFiles.add(fp);
-				} else if (response.statusCode() == 416 ) {
-					log.log(Level.INFO, "File already fully downloaded: " + file);
-					downloadedFiles.add(fp);
-				} else if (response.statusCode() == 206) {
-					log.log(Level.INFO, "File already partly downloaded: " + file);
-					downloadedFiles.add(fp);
-				} else {
-					log.log(Level.ERROR, "Failed to download: " + file + " with status code: " + response.statusCode());
-				}
+		return files.stream().map(file -> {
+			try {
+				return downloadFile(ym, client, file);
+			} catch (IOException | InterruptedException e) {
+				throw new RuntimeException(e);
 			}
+		}).parallel().onClose(() -> client.close());
+	}
+
+	private Path downloadFile(Path ym, HttpClient client, String file) throws IOException, InterruptedException {
+		Path fp = ym.resolve(Paths.get(file).getFileName());
+		log.log(Level.INFO, "Downloading: " + file + " into " + fp);
+		long at = 0;
+		if (Files.exists(fp)) {
+			at = Files.size(fp);
 		}
-		return downloadedFiles.stream();
+		HttpRequest.Builder rb = HttpRequest.newBuilder().uri(URI.create(asHttpPrefix() + file));
+		Path tempFile = Files.createTempFile(ym, "temp", "parquet");
+		BodyHandler<Path> handler = BodyHandlers.ofFile(tempFile, StandardOpenOption.APPEND,
+				StandardOpenOption.CREATE);
+		if (at > 0) {
+			rb.header("Range", "bytes=" + at + "-");
+		}
+		HttpResponse<Path> response = client.send(rb.build(), handler);
+
+		if (response.statusCode() == 200) {
+			Files.move(tempFile, fp, StandardCopyOption.REPLACE_EXISTING);
+			return fp;
+		} else if (response.statusCode() == 416) {
+			log.log(Level.INFO, "File already fully downloaded: " + file);
+			return fp;
+		} else if (response.statusCode() == 206) {
+			log.log(Level.INFO, "File already partly downloaded: " + file);
+			try (OutputStream newOutputStream = Files.newOutputStream(fp, StandardOpenOption.APPEND);
+					InputStream inputStream = Files.newInputStream(tempFile)) {
+				inputStream.transferTo(newOutputStream);
+			}
+			Files.delete(tempFile);
+			return fp;
+		} else {
+			log.log(Level.ERROR, "Failed to download: " + file + " with status code: " + response.statusCode());
+			return null;
+		}
 	}
 
 	static String parseDocument(String send, List<String> files)
