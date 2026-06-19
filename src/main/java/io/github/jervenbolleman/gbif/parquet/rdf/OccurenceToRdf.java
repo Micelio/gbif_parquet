@@ -6,13 +6,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandler;
-import java.net.http.HttpResponse.BodyHandlers;
+import java.lang.System.Logger.Level;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
@@ -23,13 +17,13 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.PrimitiveIterator.OfInt;
 import java.util.concurrent.Callable;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
 import java.util.stream.Stream;
 
 import dev.hardwood.InputFile;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
+import dev.hardwood.s3.S3Credentials;
 import dev.hardwood.s3.S3Source;
 import dev.hardwood.schema.ColumnProjection;
 import dev.hardwood.schema.ColumnSchema;
@@ -37,7 +31,6 @@ import dev.hardwood.schema.FileSchema;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
 
 @Command(name = "occurence-to-rdf", description = "Convert GBIF occurrence parquet files to RDF")
 public class OccurenceToRdf implements Callable<Integer> {
@@ -61,7 +54,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 			PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 				""".getBytes(UTF_8);
 
-	private static final Logger log = Logger.getLogger(OccurenceToRdf.class.getName());
+	private static final  System.Logger log =  System.getLogger(OccurenceToRdf.class.getName());
 
 	@Option(names = { "--year" }, description = "Year", required = true)
 	public String year;
@@ -71,6 +64,12 @@ public class OccurenceToRdf implements Callable<Integer> {
 
 	@Option(names = { "--output", "-o" }, description = "Where to write to")
 	public File output = new File("/dev/stdout");
+	
+	@Option(names = { "--s3secret"}, description = "S3 Secret for the User that has access to the files/bucket")
+	public String s3secret;
+	
+	@Option(names = { "--s3user"}, description = "S3 User that has access to the files/bucket")
+	public String s3user;
 
 	@Option(names = { "-d", "--aws" }, description = "Retrieve read parquet files from AWS S3", defaultValue = "false")
 	public boolean useS3 = false;
@@ -83,17 +82,19 @@ public class OccurenceToRdf implements Callable<Integer> {
 	@Override
 	public Integer call() throws Exception { // your business logic goes here...
 		if (year == null || year.isEmpty() || Integer.parseInt(year) < 2000 || Integer.parseInt(year) > 2100) {
-			log.log(Level.SEVERE, "Year value is missing or invalid");
+			log.log(Level.ERROR, "Year value is missing or invalid");
 			return 1;
 		}
 		if (month == null || month.isEmpty() || Integer.parseInt(month) < 0 || Integer.parseInt(month) > 12) {
-			log.log(Level.SEVERE, "Month value is missing or invalid");
+			log.log(Level.ERROR, "Month value is missing or invalid");
 			return 1;
 		}
 		if (useS3) {
-			AwsOpenDataLocations closestS3Location = findClosestS3Location();
+			AwsOpenDataLocations closestS3Location = AwsOpenDataLocations.findClosestS3Location();
 			log.log(Level.INFO, "Closest S3 location: " + closestS3Location.getLocation());
-			log.log(Level.SEVERE, "Using S3 bucket: but that is not implemented yet");
+			log.log(Level.ERROR, "Using S3 bucket: but that is not implemented yet");
+			log.log(Level.ERROR, "Check https://github.com/hardwood-hq/hardwood/issues/519");
+			
 			
 			return -1;
 		} else {
@@ -103,32 +104,6 @@ public class OccurenceToRdf implements Callable<Integer> {
 				return 1;
 			}
 		}
-	}
-
-	private AwsOpenDataLocations findClosestS3Location() throws URISyntaxException, IOException, InterruptedException {
-		AwsOpenDataLocations closestLocation = AwsOpenDataLocations.US_EAST_1; // default to US_EAST_1 if all fail
-		Map<AwsOpenDataLocations, Long> timeToFetch = new EnumMap<>(AwsOpenDataLocations.class);
-		try (HttpClient client = HttpClient.newBuilder().build()) {
-
-			for (AwsOpenDataLocations location : AwsOpenDataLocations.values()) {
-				Instant start = Instant.now();
-				HttpRequest hr = HttpRequest.newBuilder(new URI(location.asHttpPrefix() + year + "/" + month + "/"))
-						.HEAD().build();
-				HttpResponse<Void> send = client.send(hr, BodyHandlers.discarding());
-				Instant end = Instant.now();
-				if (send.statusCode() == 200) {
-					timeToFetch.put(location, Duration.between(start, end).getSeconds());
-				}
-			}
-		}
-		long fastestTime = Long.MAX_VALUE;
-		for (Map.Entry<AwsOpenDataLocations, Long> entry : timeToFetch.entrySet()) {
-			if (entry.getValue() < fastestTime) {
-				fastestTime = entry.getValue();
-				closestLocation = entry.getKey();
-			}
-		}
-		return closestLocation;
 	}
 
 	private int convertFiles(Stream<Path> list) {
@@ -156,7 +131,7 @@ public class OccurenceToRdf implements Callable<Integer> {
 				path1 = Files.readSymbolicLink(path1);
 			}
 		} catch (IOException e) {
-			log.log(Level.SEVERE, "Error resolving symbolic link: " + path1, e);
+			log.log(Level.ERROR, "Error resolving symbolic link: " + path1, e);
 			return 4;
 		}
 
@@ -172,10 +147,10 @@ public class OccurenceToRdf implements Callable<Integer> {
 			RowToTurtle.convertRows(rows, knownColumnsMap, fos);
 			logTime(path1, start, startFile);
 		} catch (IOException e) {
-			log.log(Level.SEVERE, "Error reading file: " + path1, e);
+			log.log(Level.ERROR, "Error reading file: " + path1, e);
 			return 2;
 		} catch (NoSuchAlgorithmException e) {
-			log.log(Level.SEVERE, "NoSuchAlgorithmException: " + path1, e);
+			log.log(Level.ERROR, "NoSuchAlgorithmException: " + path1, e);
 			return 3;
 		}
 		return 0;
