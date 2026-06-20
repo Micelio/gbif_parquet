@@ -34,10 +34,10 @@ public class RowToTurtle {
 	private static final byte[] XSD_GYEAR = "\"^^xsd:gYear".getBytes(UTF_8);
 
 	private static final byte[] POINT = "wdt:P625 \"Point(".getBytes(UTF_8);
-	private static final byte[] POLYGON = "wdt:P625 \"POLYGON((".getBytes(UTF_8);
+	private static final byte[] GEOMETRY_POLYGON = "geo:hasGeometry [ geo:asWKT \"POLYGON((".getBytes(UTF_8);
 	private static final byte[] SPACE = " ".getBytes(UTF_8);
 	private static final byte[] CLOSE_POINT = ")\"^^geo:wktLiteral ".getBytes(UTF_8);
-	private static final byte[] CLOSE_POLYGON = "))\"^^geo:wktLiteral ".getBytes(UTF_8);
+	private static final byte[] CLOSE_GEOMETRY_POLYGON = "))\"^^geo:wktLiteral ] ".getBytes(UTF_8);
 	private static final byte[] END_TRIPLE_BLOCK = " .\n".getBytes(UTF_8);
 	private static final byte[] CLOSE_LITERAL = "\"".getBytes(UTF_8);
 	private static final String PRE = ";\n  ";
@@ -45,9 +45,9 @@ public class RowToTurtle {
 	private static final byte[] subclassof = ("rdfs:subClassOf ").getBytes(UTF_8);
 	private static final byte[] countryCode = ("dwc:countryCode ").getBytes(UTF_8);
 	private static final byte[] closeDoubleLiteral = "\"^^xsd:double ".getBytes(UTF_8);
-	private static final byte[] gbif = "gbif:".getBytes(UTF_8);
+	private static final byte[] gbifocc = "gbifocc:".getBytes(UTF_8);
 	private static final byte[] gbifsp = "gbifsp:".getBytes(UTF_8);
-	private static final byte[] isOccurence = (" a dwc:Occurence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
+	private static final byte[] isOccurrence = (" a dwc:Occurrence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
 	private static final byte[] occurrenceStatus = ("dwc:occurrenceStatus ").getBytes(UTF_8);
 	private static final byte[] individualCount = ("dwc:individualCount ").getBytes(UTF_8);
 	private static final byte[] publishingOrgKey = ("dwc:publishingOrgKey gbifpub:").getBytes(UTF_8);
@@ -57,7 +57,7 @@ public class RowToTurtle {
 	private static final byte[] elevation = ("dwc:elevation ").getBytes(UTF_8);
 	private static final byte[] elevationaccuracy = ("dwc:elevationAccuracy ").getBytes(UTF_8);
 	private static final byte[] depth = ("dwc:depth ").getBytes(UTF_8);
-	private static final byte[] depthaccuracy = ("dwc:depthaccuracy ").getBytes(UTF_8);
+	private static final byte[] depthaccuracy = ("dwc:depthAccuracy ").getBytes(UTF_8);
 
 	private static final byte[] eventDate = ("dwc:eventDate ").getBytes(UTF_8);
 	private static final byte[] day = ("dwc:day ").getBytes(UTF_8);
@@ -93,7 +93,7 @@ public class RowToTurtle {
 	private static final byte[] infraspecificepithet = ("dwc:infraspecificEpithet ").getBytes(UTF_8);
 	private static final byte[] inDescribedPlace = (" dwciri:inDescribedPlace ").getBytes(UTF_8);
 	private static final byte[] stateProvince = ("dwc:stateProvince ").getBytes(UTF_8);
-	private static final byte[] localityCode = ("dwc:locality ").getBytes(UTF_8);
+	private static final byte[] localityLabel = ("rdfs:label ").getBytes(UTF_8);
 	private static final byte[] STRING_DELIM = "\"".getBytes(UTF_8);
 	private static final byte[] verbatimscientificnameauthorship = (" dwc:verbatimScientificNameAuthorship ")
 			.getBytes(UTF_8);
@@ -119,7 +119,7 @@ public class RowToTurtle {
 		int elevationId = getColumnId(knownColumnsMap, KnownColumns.elevation);
 		int elevationAccuracyId = getColumnId(knownColumnsMap, KnownColumns.elevationaccuracy);
 		int depthId = getColumnId(knownColumnsMap, KnownColumns.depth);
-		int depthAccuracyId = getColumnId(knownColumnsMap, KnownColumns.depth);
+		int depthAccuracyId = getColumnId(knownColumnsMap, KnownColumns.depthaccuracy);
 		int eventdateId = getColumnId(knownColumnsMap, KnownColumns.eventdate);
 		int dayId = getColumnId(knownColumnsMap, KnownColumns.day);
 		int monthId = getColumnId(knownColumnsMap, KnownColumns.month);
@@ -174,7 +174,7 @@ public class RowToTurtle {
 		}
 		if (!rows.isNull(countryCodeId)) {
 			String cc = rows.getString(countryCodeId);
-			bufferUse = add(buffer, gbif, fos, bufferUse);
+			bufferUse = add(buffer, gbifocc, fos, bufferUse);
 			byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
 			bufferUse = add(buffer, gbifid, fos, bufferUse);
 			bufferUse = add(buffer, inDescribedPlace, fos, bufferUse);
@@ -206,7 +206,7 @@ public class RowToTurtle {
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, stateProvince, stateProvinceId, true);
 			}
 			if (localityCodeS != null) {
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, localityCode, localityCodeId, true);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, localityLabel, localityCodeId, true);
 			}
 			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 		}
@@ -416,21 +416,34 @@ public class RowToTurtle {
 		if (!rows.isNull(decimallatitudeId) && !rows.isNull(decimalLongitudeId)) {
 			double longitude = rows.getDouble(decimalLongitudeId);
 			double latitude = rows.getDouble(decimallatitudeId);
+			// wdt:P625 is ALWAYS just the point, consistent with Wikidata, where a
+			// location is always a point and never a more complex geometry.
 			bufferUse = add(buffer, PREB, fos, bufferUse);
-			if (!rows.isNull(coordinateUncertaintyInMetersId)) {
-				double uncertaintity = rows.getDouble(decimallatitudeId);
-				bufferUse = addCircle(fos, buffer, bufferUse, longitude, latitude, uncertaintity);
-			} else {
-				bufferUse = addPoint(fos, buffer, bufferUse, longitude, latitude);
+			bufferUse = addPoint(fos, buffer, bufferUse, longitude, latitude);
+			// When a coordinate uncertainty is given, additionally express it as a
+			// GeoSPARQL geometry: a circle of that radius, attached via
+			// geo:hasGeometry/geo:asWKT (blank node). Radius in DEGREES (~111320 m
+			// per degree). The circle is emitted only when it stays fully within the
+			// valid WGS84 range; an uncertainty so large that the circle would leave
+			// [-90,90] x [-180,180] is not drawn (such a continent/global-scale
+			// polygon is meaningless and would produce out-of-range coordinates) --
+			// the point and dwc:coordinateUncertaintyInMeters still record the
+			// location and how uncertain it is.
+			double radius = coordinateUncertaintyInMetersId < 0 || rows.isNull(coordinateUncertaintyInMetersId)
+					? 0.0
+					: rows.getDouble(coordinateUncertaintyInMetersId) / 111320.0;
+			if (radius > 0.0 && latitude + radius <= 90.0 && latitude - radius >= -90.0
+					&& longitude + radius <= 180.0 && longitude - radius >= -180.0) {
+				bufferUse = add(buffer, PREB, fos, bufferUse);
+				bufferUse = addCircle(fos, buffer, bufferUse, longitude, latitude, radius);
 			}
-
 		}
 		return bufferUse;
 	}
 
 	private static int addCircle(OutputStream fos, byte[] buffer, int bufferUse, double longitude, double latitude,
 			double uncertaintity) throws IOException {
-		bufferUse = add(buffer, POLYGON, fos, bufferUse);
+		bufferUse = add(buffer, GEOMETRY_POLYGON, fos, bufferUse);
 		GeometricShapeFactory shapeFactory = new GeometricShapeFactory();
 	    shapeFactory.setNumPoints(32);
 	    shapeFactory.setCentre(new Coordinate(longitude, latitude));
@@ -446,7 +459,7 @@ public class RowToTurtle {
 				bufferUse = add(buffer, COMMA, fos, bufferUse);
 			}
 		}
-		bufferUse = add(buffer, CLOSE_POLYGON, fos, bufferUse);
+		bufferUse = add(buffer, CLOSE_GEOMETRY_POLYGON, fos, bufferUse);
 		return bufferUse;
 	}
 
@@ -536,7 +549,7 @@ public class RowToTurtle {
 
 	private static int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId, boolean gbifidIsLong)
 			throws IOException {
-		bufferUse = add(buffer, gbif, fos, bufferUse);
+		bufferUse = add(buffer, gbifocc, fos, bufferUse);
 
 		byte[] gbifid;
 		if (gbifidIsLong) {
@@ -546,7 +559,7 @@ public class RowToTurtle {
 		}
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
 
-		bufferUse = add(buffer, isOccurence, fos, bufferUse);
+		bufferUse = add(buffer, isOccurrence, fos, bufferUse);
 		bufferUse = add(buffer, OPEN_LITERAL, fos, bufferUse);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
 		bufferUse = closeLiteral(buffer, fos, bufferUse);

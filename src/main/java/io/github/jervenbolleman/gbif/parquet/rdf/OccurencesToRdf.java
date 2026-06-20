@@ -35,9 +35,8 @@ import picocli.CommandLine.Option;
 public class OccurencesToRdf implements Callable<Integer> {
 
 	private static final byte[] PREFIXES = """
-			PREFIX gbifid:<https://www.gbif.org/occurrence/>
 			PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-			PREFIX gbif: <https://www.gbif.org/occurrence/>
+			PREFIX gbifocc: <https://www.gbif.org/occurrence/>
 			PREFIX gbifterm: <http://rs.gbif.org/terms/1.0/>
 			PREFIX gbifds: <https://www.gbif.org/dataset/>
 			PREFIX gbifsp: <https://www.gbif.org/species/>
