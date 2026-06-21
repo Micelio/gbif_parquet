@@ -4,14 +4,12 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Function;
@@ -159,7 +157,8 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		byte[] buffer = new byte[BUFFER_SIZE];
 		int bufferUse = 0;
 		MutableRoaringBitmap seenTaxons = new MutableRoaringBitmap();
-		MessageDigest md = MessageDigest.getInstance("SHA-256");
+		
+		Digester digester = new Digester();
 		while (rows.hasNext()) {
 			rows.next();
 			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifidIsLong);
@@ -168,17 +167,16 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = addAsInteger(rows, fos, buffer, bufferUse, individualCount, individualCountColId);
 			bufferUse = addAsRawString(rows, fos, buffer, bufferUse, publishingOrgKey, publishingorgkeyColId);
 			bufferUse = addCoordinates(rows, fos, buffer, bufferUse);
-			bufferUse = addDate(rows, fos, buffer, bufferUse, eventdateColId, dayColId, monthColId, yearColId);
+			bufferUse = addDate(rows, fos, buffer, bufferUse);
 			bufferUse = andRecordData(rows, fos, buffer, bufferUse);
 			bufferUse = addLicense(rows, fos, buffer, bufferUse);
 			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxonIsInt);
-			bufferUse = addLocation(rows, fos, buffer, bufferUse, gbifColumnId, md);
+			bufferUse = addLocation(rows, fos, buffer, bufferUse, digester);
 		}
 		fos.write(buffer, 0, bufferUse);
 	}
 
-	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId,
-			MessageDigest md) throws IOException {
+	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Digester digester) throws IOException {
 		if (hasColumn(rows, countryCodeColId)) {
 			String cc = rows.getString(countryCodeColId);
 			bufferUse = add(buffer, gbifocc, fos, bufferUse);
@@ -192,13 +190,13 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 				stateProvinceS = escape(rows.getString(stateProvinceColId));
 				localityCodeS = escape(rows.getString(localityCodeColId));
 				byte[] loc = (cc + "-sp-" + stateProvinceS + "lc" + localityCodeS).getBytes(UTF_8);
-				locIri = digest(md, loc);
+				locIri = digester.digest(loc);
 			} else if (!rows.isNull(stateProvinceColId)) {
 				stateProvinceS = escape(rows.getString(stateProvinceColId));
-				locIri = digest(md, (cc + "-sp-" + stateProvinceS).getBytes(UTF_8));
+				locIri = digester.digest((cc + "-sp-" + stateProvinceS).getBytes(UTF_8));
 			} else if (!rows.isNull(localityCodeColId)) {
 				localityCodeS = escape(rows.getString(localityCodeColId));
-				locIri = digest(md, (cc + "lc" + localityCodeS).getBytes(UTF_8));
+				locIri = digester.digest((cc + "lc" + localityCodeS).getBytes(UTF_8));
 			} else {
 				locIri = ("nl:" + cc).getBytes(UTF_8);
 			}
@@ -218,46 +216,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return bufferUse;
 	}
 
-	private static class AddDigest implements Appendable {
-		private final byte[] content;
-		private int at = 3;
-
-		public AddDigest(int length) {
-			content = new byte[length + 3];
-			content[0] = 'n';
-			content[1] = 'l';
-			content[2] = ':';
-		}
-
-		@Override
-		public Appendable append(CharSequence csq) throws IOException {
-			for (int i = 0; i < csq.length(); i++) {
-				append(csq.charAt(i));
-			}
-			return this;
-		}
-
-		@Override
-		public Appendable append(CharSequence csq, int start, int end) throws IOException {
-			for (int i = start; i < end; i++) {
-				append(csq.charAt(i));
-			}
-			return this;
-		}
-
-		@Override
-		public Appendable append(char c) throws IOException {
-			content[at++] = (byte) c;
-			return this;
-		}
-
-	}
-
-	static byte[] digest(MessageDigest md, byte[] loc) {
-		AddDigest out = new AddDigest(64);
-		HexFormat.of().formatHex(out, md.digest(loc));
-		return out.content;
-	}
+	
 
 	static String escape(String string) {
 		return string.replace("\\", "\\\\");
@@ -303,8 +262,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			MutableRoaringBitmap seenTaxons, String taxon, String taxa) throws IOException {
 		if (taxon != null) {
 			int taxonInt = Integer.parseInt(taxon);
-			if (!seenTaxons.contains(taxonInt)) {
-				seenTaxons.add(taxonInt);
+			if (seenTaxons.checkedAdd(taxonInt)) {
 				bufferUse = add(buffer, gbifsp, fos, bufferUse);
 				bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 				bufferUse = add(buffer, " a dwc:Taxon ".getBytes(), fos, bufferUse);
@@ -391,16 +349,15 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return Arrays.copyOf(s.getBinary(eventdateId), 10);
 	}
 
-	private static int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int eventdateId,
-			int dayId, int monthId, int yearId) throws IOException {
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateId, XSD_DATE,
-				(s) -> fromTimestampToXsdDate(s, eventdateId));
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayId, XSD_GDAY, (s) -> intToGday(dayId, s));
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, month, monthId, XSD_GMONTH,
-				(s) -> intToGMonth(monthId, s));
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, year, yearId, XSD_GYEAR, (s) -> {
-			return Integer.toString(s.getInt(yearId)).getBytes(UTF_8);
-		});
+	private int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateColId, XSD_DATE,
+				(s) -> fromTimestampToXsdDate(s, eventdateColId));
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayColId, XSD_GDAY, (s) -> intToGday(dayColId, s));
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, month, monthColId, XSD_GMONTH,
+				(s) -> intToGMonth(monthColId, s));
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, year, yearColId, XSD_GYEAR, (s) -> 
+			Integer.toString(s.getInt(yearColId)).getBytes(UTF_8)
+		);
 		return bufferUse;
 	}
 
