@@ -73,7 +73,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] month = ("dwc:month ").getBytes(UTF_8);
 	private static final byte[] year = ("dwc:year ").getBytes(UTF_8);
 
-	private static final byte[] basisOfRecord = (" dwc:basisOfRecord ").getBytes(UTF_8);
+	private static final byte[] basisOfRecord = ("dwc:basisOfRecord ").getBytes(UTF_8);
 	private static final byte[] institutioncode = ("dwc:institutionCode ").getBytes(UTF_8);
 	private static final byte[] collectioncode = ("dwc:collectionCode ").getBytes(UTF_8);
 	private static final byte[] catalognumber = ("dwc:catalogNumber ").getBytes(UTF_8);
