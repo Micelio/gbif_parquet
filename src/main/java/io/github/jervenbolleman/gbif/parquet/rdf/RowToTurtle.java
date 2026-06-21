@@ -30,7 +30,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		int coordinateUncertaintyInMetersColId, int elevationColId, int elevationAccuracyColId, int depthColId,
 		int depthAccuracyColId, int eventdateColId, int dayColId, int monthColId, int yearColId, int basisOfRecordColId,
 		int institutioncodeColId, int collectioncodeColId, int catalognumberColId, int recordnumberColId,
-		int identifiedbyId, int dateidentifiedColId, int rightsholderColId, int recordedbyColId, int typestatusColId,
+		int identifiedbyColId, int dateidentifiedColId, int rightsholderColId, int recordedbyColId, int typestatusColId,
 		int establishmentmeansColId, int lastinterpretedColId, int mediatypeColId, int issueColId, int taxonkeyColId,
 		int speciesKeyColId, int licenseColId, int stateProvinceColId, int localityCodeColId, int kingdomColId,
 		int phylumColId, int clazzColId, int orderColId, int familyColId, int genusColId, int taxonrankColId,
@@ -179,10 +179,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 
 	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId,
 			MessageDigest md) throws IOException {
-		if (countryCodeColId < 0 && stateProvinceColId < 0 && localityCodeColId < 0) {
-			return bufferUse;
-		}
-		if (!rows.isNull(countryCodeColId)) {
+		if (hasColumn(rows, countryCodeColId)) {
 			String cc = rows.getString(countryCodeColId);
 			bufferUse = add(buffer, gbifocc, fos, bufferUse);
 			byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
@@ -190,26 +187,24 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = add(buffer, inDescribedPlace, fos, bufferUse);
 			String stateProvinceS = null;
 			String localityCodeS = null;
-			String locIri;
-
-			if (!rows.isNull(stateProvinceColId) && !rows.isNull(localityCodeColId)) {
+			byte[] locIri;
+			if (hasColumn(rows, stateProvinceColId) && hasColumn(rows, localityCodeColId)) {
 				stateProvinceS = escape(rows.getString(stateProvinceColId));
 				localityCodeS = escape(rows.getString(localityCodeColId));
-
-				locIri = "nl:" + HexFormat.of()
-						.formatHex(md.digest((cc + "-sp-" + stateProvinceS + "lc" + localityCodeS).getBytes(UTF_8)));
+				byte[] loc = (cc + "-sp-" + stateProvinceS + "lc" + localityCodeS).getBytes(UTF_8);
+				locIri = digest(md, loc);
 			} else if (!rows.isNull(stateProvinceColId)) {
 				stateProvinceS = escape(rows.getString(stateProvinceColId));
-				locIri = "nl:" + HexFormat.of().formatHex(md.digest((cc + "-sp-" + stateProvinceS).getBytes(UTF_8)));
+				locIri = digest(md, (cc + "-sp-" + stateProvinceS).getBytes(UTF_8));
 			} else if (!rows.isNull(localityCodeColId)) {
 				localityCodeS = escape(rows.getString(localityCodeColId));
-				locIri = "nl:" + HexFormat.of().formatHex(md.digest((cc + "lc" + localityCodeS).getBytes(UTF_8)));
+				locIri = digest(md, (cc + "lc" + localityCodeS).getBytes(UTF_8));
 			} else {
-				locIri = "nl:" + cc;
+				locIri = ("nl:" + cc).getBytes(UTF_8);
 			}
-			bufferUse = add(buffer, locIri.getBytes(UTF_8), fos, bufferUse);
+			bufferUse = add(buffer, locIri, fos, bufferUse);
 			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
-			bufferUse = add(buffer, locIri.getBytes(UTF_8), fos, bufferUse);
+			bufferUse = add(buffer, locIri, fos, bufferUse);
 			bufferUse = add(buffer, " a dwc:Location\n ".getBytes(UTF_8), fos, bufferUse);
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeColId, true);
 			if (stateProvinceS != null) {
@@ -223,7 +218,48 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return bufferUse;
 	}
 
-	private static String escape(String string) {
+	private static class AddDigest implements Appendable {
+		private final byte[] content;
+		private int at = 3;
+
+		public AddDigest(int length) {
+			content = new byte[length + 3];
+			content[0] = 'n';
+			content[1] = 'l';
+			content[2] = ':';
+		}
+
+		@Override
+		public Appendable append(CharSequence csq) throws IOException {
+			for (int i = 0; i < csq.length(); i++) {
+				append(csq.charAt(i));
+			}
+			return this;
+		}
+
+		@Override
+		public Appendable append(CharSequence csq, int start, int end) throws IOException {
+			for (int i = start; i < end; i++) {
+				append(csq.charAt(i));
+			}
+			return this;
+		}
+
+		@Override
+		public Appendable append(char c) throws IOException {
+			content[at++] = (byte) c;
+			return this;
+		}
+
+	}
+
+	static byte[] digest(MessageDigest md, byte[] loc) {
+		AddDigest out = new AddDigest(64);
+		HexFormat.of().formatHex(out, md.digest(loc));
+		return out.content;
+	}
+
+	static String escape(String string) {
 		return string.replace("\\", "\\\\");
 	}
 
@@ -231,7 +267,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			MutableRoaringBitmap seenTaxons, boolean taxonIsInt) throws IOException {
 		String taxon = null;
 		String species = null;
-		if (taxonkeyColId < 0 || !rows.isNull(taxonkeyColId)) {
+		if (hasColumn(rows, taxonkeyColId)) {
 			if (taxonIsInt)
 				taxon = Integer.toString(rows.getInt(taxonkeyColId));
 			else
@@ -240,7 +276,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = add(buffer, toTaxon, fos, bufferUse);
 			bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 		}
-		if (speciesKeyColId < 0 || !rows.isNull(speciesKeyColId)) {
+		if (hasColumn(rows, speciesKeyColId)) {
 			if (taxonIsInt)
 				species = Integer.toString(rows.getInt(speciesKeyColId));
 			else
@@ -257,6 +293,10 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon);
 		}
 		return bufferUse;
+	}
+
+	private static boolean hasColumn(RowReader rows, int colId) {
+		return colId < 0 || !rows.isNull(colId);
 	}
 
 	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
@@ -294,7 +334,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	}
 
 	private int addLicense(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
-		if (licenseColId < 0 || rows.isNull(licenseColId)) {
+		if (hasColumn(rows, licenseColId)) {
 			return bufferUse;
 		} else {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
@@ -326,8 +366,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, catalognumber, catalognumberColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordnumber, recordnumberColId, true);
-		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, identifiedby,
-				KnownColumns.identifiedby.columnName(), true);
+		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, identifiedby, identifiedbyColId, true);
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, dateidentified, dateidentifiedColId, XSD_DATE,
 				(s) -> fromTimestampToXsdDate(s, dateidentifiedColId));
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderColId, true);
@@ -480,7 +519,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 
 	private static int addAsLiteralString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
 			byte[] predicate, int colId, boolean escape) throws IOException {
-		if (colId < 0 || rows.isNull(colId)) {
+		if (hasColumn(rows, colId)) {
 			return bufferUse;
 		} else {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
@@ -494,30 +533,6 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 				bufferUse = add(buffer, rows.getBinary(colId), fos, bufferUse);
 			}
 			bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
-			return bufferUse;
-		}
-	}
-
-	private static int addAsLiteralStrings(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
-			byte[] predicate, String colId, boolean escape) throws IOException {
-		PqList list = rows.getList(colId);
-		if (list != null && !list.isEmpty()) {
-			bufferUse = add(buffer, PREB, fos, bufferUse);
-			bufferUse = add(buffer, predicate, fos, bufferUse);
-			for (Iterator<String> iterator = list.strings().iterator(); iterator.hasNext();) {
-				String li = iterator.next();
-				if (escape) {
-					li = escapeQuotes(li);
-				}
-				bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
-				bufferUse = add(buffer, li.getBytes(UTF_8), fos, bufferUse);
-				bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
-				if (iterator.hasNext()) {
-					bufferUse = add(buffer, COMMA, fos, bufferUse);
-				}
-			}
-			return bufferUse;
-		} else {
 			return bufferUse;
 		}
 	}
