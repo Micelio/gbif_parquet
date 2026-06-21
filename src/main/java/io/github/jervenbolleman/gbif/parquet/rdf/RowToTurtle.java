@@ -25,7 +25,16 @@ import dev.hardwood.reader.RowReader;
 import dev.hardwood.row.PqList;
 import dev.hardwood.row.StructAccessor;
 
-public class RowToTurtle {
+public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int individualCountColId,
+		int publishingorgkeyColId, int countryCodeColId, int decimallatitudeColId, int decimalLongitudeColId,
+		int coordinateUncertaintyInMetersColId, int elevationColId, int elevationAccuracyColId, int depthColId,
+		int depthAccuracyColId, int eventdateColId, int dayColId, int monthColId, int yearColId, int basisOfRecordColId,
+		int institutioncodeColId, int collectioncodeColId, int catalognumberColId, int recordnumberColId,
+		int identifiedbyId, int dateidentifiedColId, int rightsholderColId, int recordedbyColId, int typestatusColId,
+		int establishmentmeansColId, int lastinterpretedColId, int mediatypeColId, int issueColId, int taxonkeyColId,
+		int speciesKeyColId, int licenseColId, int stateProvinceColId, int localityCodeColId, int kingdomColId,
+		int phylumColId, int clazzColId, int orderColId, int familyColId, int genusColId, int taxonrankColId,
+		int verbatimscientificnameauthorshipColId, int speciesNameColId, int infraspecificepithetColId) {
 	private static final byte[] OPEN_LITERAL = "\"".getBytes(UTF_8);
 	private static final byte[] COMMA = ", ".getBytes(UTF_8);
 	private static final byte[] XSD_DATE = "\"^^xsd:date".getBytes(UTF_8);
@@ -104,76 +113,77 @@ public class RowToTurtle {
 	private static final byte[] CC0_1_0 = "cc0: ".getBytes(UTF_8);
 	private static final int BUFFER_SIZE = 16 * 8096;
 
-	static void convertRows(RowReader rows, Map<KnownColumns, Integer> knownColumnsMap, OutputStream fos, boolean taxonIsInt, boolean gbifidIsLong)
+	public RowToTurtle(RowReader rows, Map<KnownColumns, Integer> knownColumnsMap) {
+		this(getColumnId(knownColumnsMap, KnownColumns.gbifid),
+				getColumnId(knownColumnsMap, KnownColumns.occurrencestatus),
+				getColumnId(knownColumnsMap, KnownColumns.individualcount),
+				getColumnId(knownColumnsMap, KnownColumns.publishingorgkey),
+				getColumnId(knownColumnsMap, KnownColumns.countrycode),
+				getColumnId(knownColumnsMap, KnownColumns.decimallatitude),
+				getColumnId(knownColumnsMap, KnownColumns.decimallongitude),
+				getColumnId(knownColumnsMap, KnownColumns.coordinateuncertaintyinmeters),
+				getColumnId(knownColumnsMap, KnownColumns.elevation),
+				getColumnId(knownColumnsMap, KnownColumns.elevationaccuracy),
+				getColumnId(knownColumnsMap, KnownColumns.depth),
+				getColumnId(knownColumnsMap, KnownColumns.depthaccuracy),
+				getColumnId(knownColumnsMap, KnownColumns.eventdate), getColumnId(knownColumnsMap, KnownColumns.day),
+				getColumnId(knownColumnsMap, KnownColumns.month), getColumnId(knownColumnsMap, KnownColumns.year),
+				getColumnId(knownColumnsMap, KnownColumns.basisofrecord),
+				getColumnId(knownColumnsMap, KnownColumns.institutioncode),
+				getColumnId(knownColumnsMap, KnownColumns.collectioncode),
+				getColumnId(knownColumnsMap, KnownColumns.catalognumber),
+				getColumnId(knownColumnsMap, KnownColumns.recordnumber),
+				getColumnId(knownColumnsMap, KnownColumns.identifiedby),
+				getColumnId(knownColumnsMap, KnownColumns.dateidentified),
+				getColumnId(knownColumnsMap, KnownColumns.rightsholder),
+				getColumnId(knownColumnsMap, KnownColumns.recordedby),
+				getColumnId(knownColumnsMap, KnownColumns.typestatus),
+				getColumnId(knownColumnsMap, KnownColumns.establishmentmeans),
+				getColumnId(knownColumnsMap, KnownColumns.lastinterpreted),
+				getColumnId(knownColumnsMap, KnownColumns.mediatype), getColumnId(knownColumnsMap, KnownColumns.issue),
+				getColumnId(knownColumnsMap, KnownColumns.taxonkey),
+				getColumnId(knownColumnsMap, KnownColumns.specieskey),
+				getColumnId(knownColumnsMap, KnownColumns.license),
+				getColumnId(knownColumnsMap, KnownColumns.stateprovince),
+				getColumnId(knownColumnsMap, KnownColumns.locality), getColumnId(knownColumnsMap, KnownColumns.kingdom),
+				getColumnId(knownColumnsMap, KnownColumns.phylum), getColumnId(knownColumnsMap, KnownColumns.clazz),
+				getColumnId(knownColumnsMap, KnownColumns.order), getColumnId(knownColumnsMap, KnownColumns.family),
+				getColumnId(knownColumnsMap, KnownColumns.genus), getColumnId(knownColumnsMap, KnownColumns.taxonrank),
+				getColumnId(knownColumnsMap, KnownColumns.verbatimscientificnameauthorship),
+				getColumnId(knownColumnsMap, KnownColumns.species),
+				getColumnId(knownColumnsMap, KnownColumns.infraspecificepithet));
+	}
+
+	void convertRows(RowReader rows, OutputStream fos, boolean taxonIsInt, boolean gbifidIsLong)
 			throws IOException, NoSuchAlgorithmException {
 		byte[] buffer = new byte[BUFFER_SIZE];
 		int bufferUse = 0;
-		int gbifColumnId = getColumnId(knownColumnsMap, KnownColumns.gbifid);
-		int occurenceStatusId = getColumnId(knownColumnsMap, KnownColumns.occurrencestatus);
-		int individualCountId = getColumnId(knownColumnsMap, KnownColumns.individualcount);
-		int publishingorgkeyId = getColumnId(knownColumnsMap, KnownColumns.publishingorgkey);
-		int countryCodeId = getColumnId(knownColumnsMap, KnownColumns.countrycode);
-		int decimallatitudeId = getColumnId(knownColumnsMap, KnownColumns.decimallatitude);
-		int decimalLongitudeId = getColumnId(knownColumnsMap, KnownColumns.decimallongitude);
-		int coordinateUncertaintyInMetersId = getColumnId(knownColumnsMap, KnownColumns.coordinateuncertaintyinmeters);
-		int elevationId = getColumnId(knownColumnsMap, KnownColumns.elevation);
-		int elevationAccuracyId = getColumnId(knownColumnsMap, KnownColumns.elevationaccuracy);
-		int depthId = getColumnId(knownColumnsMap, KnownColumns.depth);
-		int depthAccuracyId = getColumnId(knownColumnsMap, KnownColumns.depthaccuracy);
-		int eventdateId = getColumnId(knownColumnsMap, KnownColumns.eventdate);
-		int dayId = getColumnId(knownColumnsMap, KnownColumns.day);
-		int monthId = getColumnId(knownColumnsMap, KnownColumns.month);
-		int yearId = getColumnId(knownColumnsMap, KnownColumns.year);
-		int basisOfRecordId = getColumnId(knownColumnsMap, KnownColumns.basisofrecord);
-		int institutioncodeId = getColumnId(knownColumnsMap, KnownColumns.institutioncode);
-		int collectioncodeId = getColumnId(knownColumnsMap, KnownColumns.collectioncode);
-		int catalognumberId = getColumnId(knownColumnsMap, KnownColumns.catalognumber);
-		int recordnumberId = getColumnId(knownColumnsMap, KnownColumns.recordnumber);
-		int identifiedbyId = getColumnId(knownColumnsMap, KnownColumns.identifiedby);
-		int dateidentifiedId = getColumnId(knownColumnsMap, KnownColumns.dateidentified);
-		int rightsholderId = getColumnId(knownColumnsMap, KnownColumns.rightsholder);
-		int recordedbyId = getColumnId(knownColumnsMap, KnownColumns.recordedby);
-		int typestatus = getColumnId(knownColumnsMap, KnownColumns.typestatus);
-		int establishmentmeans = getColumnId(knownColumnsMap, KnownColumns.establishmentmeans);
-		int lastinterpreted = getColumnId(knownColumnsMap, KnownColumns.lastinterpreted);
-		int mediatype = getColumnId(knownColumnsMap, KnownColumns.mediatype);
-		int issue = getColumnId(knownColumnsMap, KnownColumns.issue);
-		int taxonkeyId = getColumnId(knownColumnsMap, KnownColumns.taxonkey);
-		int speciesId = getColumnId(knownColumnsMap, KnownColumns.specieskey);
 		MutableRoaringBitmap seenTaxons = new MutableRoaringBitmap();
 		MessageDigest md = MessageDigest.getInstance("SHA-256");
 		while (rows.hasNext()) {
 			rows.next();
-			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifColumnId, gbifidIsLong);
+			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifidIsLong);
 
-			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, occurrenceStatus, occurenceStatusId, false);
-			bufferUse = addAsInteger(rows, fos, buffer, bufferUse, individualCount, individualCountId);
-			bufferUse = addAsRawString(rows, fos, buffer, bufferUse, publishingOrgKey, publishingorgkeyId);
-			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeId, false);
-			bufferUse = addCoordinates(rows, fos, buffer, bufferUse, decimallatitudeId, decimalLongitudeId,
-					coordinateUncertaintyInMetersId, elevationId, elevationAccuracyId, depthId, depthAccuracyId);
-			bufferUse = addDate(rows, fos, buffer, bufferUse, eventdateId, dayId, monthId, yearId);
-			bufferUse = andRecordData(rows, fos, buffer, bufferUse, basisOfRecordId, institutioncodeId,
-					collectioncodeId, catalognumberId, recordnumberId, identifiedbyId, dateidentifiedId, rightsholderId,
-					recordedbyId, typestatus, establishmentmeans, lastinterpreted, mediatype, issue);
-			bufferUse = addLicense(rows, fos, buffer, bufferUse, getColumnId(knownColumnsMap, KnownColumns.license));
-
-			bufferUse = addTaxon(rows, fos, buffer, bufferUse, taxonkeyId, speciesId, seenTaxons, knownColumnsMap, taxonIsInt);
-			bufferUse = addLocation(rows, fos, buffer, bufferUse, gbifColumnId, knownColumnsMap, md);
+			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, occurrenceStatus, occurenceStatusColId, false);
+			bufferUse = addAsInteger(rows, fos, buffer, bufferUse, individualCount, individualCountColId);
+			bufferUse = addAsRawString(rows, fos, buffer, bufferUse, publishingOrgKey, publishingorgkeyColId);
+			bufferUse = addCoordinates(rows, fos, buffer, bufferUse);
+			bufferUse = addDate(rows, fos, buffer, bufferUse, eventdateColId, dayColId, monthColId, yearColId);
+			bufferUse = andRecordData(rows, fos, buffer, bufferUse);
+			bufferUse = addLicense(rows, fos, buffer, bufferUse);
+			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxonIsInt);
+			bufferUse = addLocation(rows, fos, buffer, bufferUse, gbifColumnId, md);
 		}
 		fos.write(buffer, 0, bufferUse);
 	}
 
-	private static int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId,
-			Map<KnownColumns, Integer> knownColumnsMap, MessageDigest md) throws IOException {
-		int countryCodeId = getColumnId(knownColumnsMap, KnownColumns.countrycode);
-		int stateProvinceId = getColumnId(knownColumnsMap, KnownColumns.stateprovince);
-		int localityCodeId = getColumnId(knownColumnsMap, KnownColumns.locality);
-		if (countryCodeId < 0 && stateProvinceId < 0 && localityCodeId < 0) {
+	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId,
+			MessageDigest md) throws IOException {
+		if (countryCodeColId < 0 && stateProvinceColId < 0 && localityCodeColId < 0) {
 			return bufferUse;
 		}
-		if (!rows.isNull(countryCodeId)) {
-			String cc = rows.getString(countryCodeId);
+		if (!rows.isNull(countryCodeColId)) {
+			String cc = rows.getString(countryCodeColId);
 			bufferUse = add(buffer, gbifocc, fos, bufferUse);
 			byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
 			bufferUse = add(buffer, gbifid, fos, bufferUse);
@@ -182,17 +192,17 @@ public class RowToTurtle {
 			String localityCodeS = null;
 			String locIri;
 
-			if (!rows.isNull(stateProvinceId) && !rows.isNull(localityCodeId)) {
-				stateProvinceS = escape(rows.getString(stateProvinceId));
-				localityCodeS = escape(rows.getString(localityCodeId));
+			if (!rows.isNull(stateProvinceColId) && !rows.isNull(localityCodeColId)) {
+				stateProvinceS = escape(rows.getString(stateProvinceColId));
+				localityCodeS = escape(rows.getString(localityCodeColId));
 
 				locIri = "nl:" + HexFormat.of()
 						.formatHex(md.digest((cc + "-sp-" + stateProvinceS + "lc" + localityCodeS).getBytes(UTF_8)));
-			} else if (!rows.isNull(stateProvinceId)) {
-				stateProvinceS = escape(rows.getString(stateProvinceId));
+			} else if (!rows.isNull(stateProvinceColId)) {
+				stateProvinceS = escape(rows.getString(stateProvinceColId));
 				locIri = "nl:" + HexFormat.of().formatHex(md.digest((cc + "-sp-" + stateProvinceS).getBytes(UTF_8)));
-			} else if (!rows.isNull(localityCodeId)) {
-				localityCodeS = escape(rows.getString(localityCodeId));
+			} else if (!rows.isNull(localityCodeColId)) {
+				localityCodeS = escape(rows.getString(localityCodeColId));
 				locIri = "nl:" + HexFormat.of().formatHex(md.digest((cc + "lc" + localityCodeS).getBytes(UTF_8)));
 			} else {
 				locIri = "nl:" + cc;
@@ -201,16 +211,15 @@ public class RowToTurtle {
 			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 			bufferUse = add(buffer, locIri.getBytes(UTF_8), fos, bufferUse);
 			bufferUse = add(buffer, " a dwc:Location\n ".getBytes(UTF_8), fos, bufferUse);
-			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeId, true);
+			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeColId, true);
 			if (stateProvinceS != null) {
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, stateProvince, stateProvinceId, true);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, stateProvince, stateProvinceColId, true);
 			}
 			if (localityCodeS != null) {
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, localityLabel, localityCodeId, true);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, localityLabel, localityCodeColId, true);
 			}
 			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 		}
-
 		return bufferUse;
 	}
 
@@ -218,25 +227,24 @@ public class RowToTurtle {
 		return string.replace("\\", "\\\\");
 	}
 
-	private static int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int taxonkeyId,
-			int speciesId, MutableRoaringBitmap seenTaxons, Map<KnownColumns, Integer> knownColumnsMap, boolean taxonIsInt)
-			throws IOException {
+	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
+			MutableRoaringBitmap seenTaxons, boolean taxonIsInt) throws IOException {
 		String taxon = null;
 		String species = null;
-		if (taxonkeyId < 0 || !rows.isNull(taxonkeyId)) {
+		if (taxonkeyColId < 0 || !rows.isNull(taxonkeyColId)) {
 			if (taxonIsInt)
-				taxon = Integer.toString(rows.getInt(taxonkeyId));
+				taxon = Integer.toString(rows.getInt(taxonkeyColId));
 			else
-				taxon = rows.getString(taxonkeyId);
+				taxon = rows.getString(taxonkeyColId);
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, toTaxon, fos, bufferUse);
 			bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 		}
-		if (speciesId < 0 || !rows.isNull(speciesId)) {
+		if (speciesKeyColId < 0 || !rows.isNull(speciesKeyColId)) {
 			if (taxonIsInt)
-				species = Integer.toString(rows.getInt(speciesId));
+				species = Integer.toString(rows.getInt(speciesKeyColId));
 			else
-				species = rows.getString(speciesId);
+				species = rows.getString(speciesKeyColId);
 			if (species != null && !species.equals(taxon)) {
 				bufferUse = add(buffer, PREB, fos, bufferUse);
 				bufferUse = add(buffer, toTaxon, fos, bufferUse);
@@ -244,16 +252,15 @@ public class RowToTurtle {
 			}
 		}
 		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
-		bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null, knownColumnsMap);
+		bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null);
 		if (species != null && !species.equals(taxon)) {
-			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon, knownColumnsMap);
+			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon);
 		}
 		return bufferUse;
 	}
 
-	private static int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
-			MutableRoaringBitmap seenTaxons, String taxon, String taxa, Map<KnownColumns, Integer> knownColumnsMap)
-			throws IOException {
+	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
+			MutableRoaringBitmap seenTaxons, String taxon, String taxa) throws IOException {
 		if (taxon != null) {
 			int taxonInt = Integer.parseInt(taxon);
 			if (!seenTaxons.contains(taxonInt)) {
@@ -262,27 +269,19 @@ public class RowToTurtle {
 				bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 				bufferUse = add(buffer, " a dwc:Taxon ".getBytes(), fos, bufferUse);
 
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, kingdom,
-						getColumnId(knownColumnsMap, KnownColumns.kingdom), false);
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, phylum,
-						getColumnId(knownColumnsMap, KnownColumns.phylum), false);
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, clazz,
-						getColumnId(knownColumnsMap, KnownColumns.clazz), false);
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, order,
-						getColumnId(knownColumnsMap, KnownColumns.order), false);
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, family,
-						getColumnId(knownColumnsMap, KnownColumns.family), false);
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, genus,
-						getColumnId(knownColumnsMap, KnownColumns.genus), false);
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, taxonrank,
-						getColumnId(knownColumnsMap, KnownColumns.taxonrank), false);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, kingdom, kingdomColId, false);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, phylum, phylumColId, false);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, clazz, clazzColId, false);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, order, orderColId, false);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, family, familyColId, false);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, genus, genusColId, false);
+				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, taxonrank, taxonrankColId, false);
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, verbatimscientificnameauthorship,
-						getColumnId(knownColumnsMap, KnownColumns.verbatimscientificnameauthorship), true);
+						verbatimscientificnameauthorshipColId, true);
 				if (taxa != null) {
-					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, species,
-							getColumnId(knownColumnsMap, KnownColumns.species), true);
+					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, species, speciesNameColId, true);
 					bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, infraspecificepithet,
-							getColumnId(knownColumnsMap, KnownColumns.infraspecificepithet), true);
+							infraspecificepithetColId, true);
 					bufferUse = add(buffer, PREB, fos, bufferUse);
 					bufferUse = add(buffer, subclassof, fos, bufferUse);
 					bufferUse = add(buffer, gbifsp, fos, bufferUse);
@@ -294,14 +293,13 @@ public class RowToTurtle {
 		return bufferUse;
 	}
 
-	private static int addLicense(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int columnId)
-			throws IOException {
-		if (columnId < 0 || rows.isNull(columnId)) {
+	private int addLicense(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
+		if (licenseColId < 0 || rows.isNull(licenseColId)) {
 			return bufferUse;
 		} else {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, license, fos, bufferUse);
-			switch (rows.getString(columnId)) {
+			switch (rows.getString(licenseColId)) {
 			case "CC_BY_4_0":
 				bufferUse = add(buffer, CC_BY_4_0, fos, bufferUse);
 				break;
@@ -312,7 +310,7 @@ public class RowToTurtle {
 				bufferUse = add(buffer, CC0_1_0, fos, bufferUse);
 				break;
 			default:
-				throw new IOException("Unknown license: " + rows.getString(columnId));
+				throw new IOException("Unknown license: " + rows.getString(licenseColId));
 			}
 			return bufferUse;
 		}
@@ -322,29 +320,25 @@ public class RowToTurtle {
 		return knownColumnsMap.getOrDefault(kc, -404);
 	}
 
-	private static int andRecordData(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
-			int basisOfRecordId, int institutioncodeId, int collectioncodeId, int catalognumberId, int recordnumberId,
-			int identifiedbyId, int dateidentifiedId, int rightsholderId, int recordedbyId, int typestatusId,
-			int establishmentmeansId, int lastinterpretedId, int mediatypeId, int issueId) throws IOException {
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, basisOfRecord, basisOfRecordId, false);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, institutioncode, institutioncodeId, true);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeId, true);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, catalognumber, catalognumberId, true);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordnumber, recordnumberId, true);
+	private int andRecordData(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, basisOfRecord, basisOfRecordColId, false);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, institutioncode, institutioncodeColId, true);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeColId, true);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, catalognumber, catalognumberColId, true);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordnumber, recordnumberColId, true);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, identifiedby,
 				KnownColumns.identifiedby.columnName(), true);
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, dateidentified, dateidentifiedId, XSD_DATE,
-				(s) -> fromTimestampToXsdDate(s, dateidentifiedId));
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderId, true);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordedby, recordedbyId, true);
-		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, typestatus, KnownColumns.typestatus.columnName(),
-				true);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, establishmentmeans, establishmentmeansId, false);
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, lastinterpreted, lastinterpretedId, XSD_DATE,
-				(s) -> fromTimestampToXsdDate(s, lastinterpretedId));
-		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, mediatype, KnownColumns.mediatype.columnName(),
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, dateidentified, dateidentifiedColId, XSD_DATE,
+				(s) -> fromTimestampToXsdDate(s, dateidentifiedColId));
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderColId, true);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordedby, recordedbyColId, true);
+		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, typestatus, typestatusColId, true);
+		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, establishmentmeans, establishmentmeansColId,
 				false);
-		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, issue, KnownColumns.issue.columnName(), true);
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, lastinterpreted, lastinterpretedColId, XSD_DATE,
+				(s) -> fromTimestampToXsdDate(s, lastinterpretedColId));
+		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, mediatype, mediatypeColId, false);
+		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, issue, issueColId, true);
 		return bufferUse;
 	}
 
@@ -353,7 +347,7 @@ public class RowToTurtle {
 		LocalDate localD = LocalDate.ofInstant(timestamp, ZoneOffset.UTC);
 		return DateTimeFormatter.ISO_LOCAL_DATE.format(localD).getBytes(UTF_8);
 	}
-	
+
 	private static byte[] fromVarCharToXsdDate(StructAccessor s, int eventdateId) {
 		return Arrays.copyOf(s.getBinary(eventdateId), 10);
 	}
@@ -362,30 +356,32 @@ public class RowToTurtle {
 			int dayId, int monthId, int yearId) throws IOException {
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateId, XSD_DATE,
 				(s) -> fromTimestampToXsdDate(s, eventdateId));
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayId, XSD_GDAY, (s) -> {
-
-			int dc = s.getInt(dayId);
-			if (dc < 10) {
-				return ("---0" + dc).getBytes(UTF_8);
-			} else {
-				return ("---" + dc).getBytes(UTF_8);
-			}
-		});
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, month, monthId, XSD_GMONTH, (s) -> {
-			int monthInt = s.getInt(monthId);
-			if (monthInt < 10) {
-				return ("--0" + monthInt).getBytes(UTF_8);
-			} else {
-				return ("--" + monthInt).getBytes(UTF_8);
-			}
-		});
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayId, XSD_GDAY, (s) -> intToGday(dayId, s));
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, month, monthId, XSD_GMONTH,
+				(s) -> intToGMonth(monthId, s));
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, year, yearId, XSD_GYEAR, (s) -> {
 			return Integer.toString(s.getInt(yearId)).getBytes(UTF_8);
 		});
 		return bufferUse;
 	}
 
-	
+	private static byte[] intToGMonth(int monthId, StructAccessor s) {
+		int monthInt = s.getInt(monthId);
+		if (monthInt < 10) {
+			return ("--0" + monthInt).getBytes(UTF_8);
+		} else {
+			return ("--" + monthInt).getBytes(UTF_8);
+		}
+	}
+
+	private static byte[] intToGday(int dayId, StructAccessor s) {
+		int dc = s.getInt(dayId);
+		if (dc < 10) {
+			return ("---0" + dc).getBytes(UTF_8);
+		} else {
+			return ("---" + dc).getBytes(UTF_8);
+		}
+	}
 
 	private static int addAsDatatypeString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
 			byte[] predicate, int colId, byte[] datatype, Function<StructAccessor, byte[]> extractor)
@@ -402,20 +398,18 @@ public class RowToTurtle {
 		}
 	}
 
-	private static int addCoordinates(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
-			int decimallatitudeId, int decimalLongitudeId, int coordinateUncertaintyInMetersId, int elevationId,
-			int elevationAccuracyId, int depthId, int depthAccuracyId) throws IOException {
-		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, decimalLatitude, decimallatitudeId);
-		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, decimalLongitude, decimalLongitudeId);
+	private int addCoordinates(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
+		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, decimalLatitude, decimallatitudeColId);
+		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, decimalLongitude, decimalLongitudeColId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, coordinateUncertaintyInMeters,
-				coordinateUncertaintyInMetersId);
-		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, elevation, elevationId);
-		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, elevationaccuracy, elevationAccuracyId);
-		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depth, depthId);
-		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depthaccuracy, depthAccuracyId);
-		if (!rows.isNull(decimallatitudeId) && !rows.isNull(decimalLongitudeId)) {
-			double longitude = rows.getDouble(decimalLongitudeId);
-			double latitude = rows.getDouble(decimallatitudeId);
+				coordinateUncertaintyInMetersColId);
+		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, elevation, elevationColId);
+		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, elevationaccuracy, elevationAccuracyColId);
+		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depth, depthColId);
+		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, depthaccuracy, depthAccuracyColId);
+		if (!rows.isNull(decimallatitudeColId) && !rows.isNull(decimalLongitudeColId)) {
+			double longitude = rows.getDouble(decimalLongitudeColId);
+			double latitude = rows.getDouble(decimallatitudeColId);
 			// wdt:P625 is ALWAYS just the point, consistent with Wikidata, where a
 			// location is always a point and never a more complex geometry.
 			bufferUse = add(buffer, PREB, fos, bufferUse);
@@ -429,11 +423,11 @@ public class RowToTurtle {
 			// polygon is meaningless and would produce out-of-range coordinates) --
 			// the point and dwc:coordinateUncertaintyInMeters still record the
 			// location and how uncertain it is.
-			double radius = coordinateUncertaintyInMetersId < 0 || rows.isNull(coordinateUncertaintyInMetersId)
+			double radius = coordinateUncertaintyInMetersColId < 0 || rows.isNull(coordinateUncertaintyInMetersColId)
 					? 0.0
-					: rows.getDouble(coordinateUncertaintyInMetersId) / 111320.0;
-			if (radius > 0.0 && latitude + radius <= 90.0 && latitude - radius >= -90.0
-					&& longitude + radius <= 180.0 && longitude - radius >= -180.0) {
+					: rows.getDouble(coordinateUncertaintyInMetersColId) / 111320.0;
+			if (radius > 0.0 && latitude + radius <= 90.0 && latitude - radius >= -90.0 && longitude + radius <= 180.0
+					&& longitude - radius >= -180.0) {
 				bufferUse = add(buffer, PREB, fos, bufferUse);
 				bufferUse = addCircle(fos, buffer, bufferUse, longitude, latitude, radius);
 			}
@@ -445,10 +439,10 @@ public class RowToTurtle {
 			double uncertaintity) throws IOException {
 		bufferUse = add(buffer, GEOMETRY_POLYGON, fos, bufferUse);
 		GeometricShapeFactory shapeFactory = new GeometricShapeFactory();
-	    shapeFactory.setNumPoints(32);
-	    shapeFactory.setCentre(new Coordinate(longitude, latitude));
-	    shapeFactory.setSize(uncertaintity * 2);
-	    Polygon circle = shapeFactory.createCircle();
+		shapeFactory.setNumPoints(32);
+		shapeFactory.setCentre(new Coordinate(longitude, latitude));
+		shapeFactory.setSize(uncertaintity * 2);
+		Polygon circle = shapeFactory.createCircle();
 		Coordinate[] coordinates = circle.getCoordinates();
 		for (int i = 0; i < coordinates.length; i++) {
 			Coordinate coordinate = coordinates[i];
@@ -466,8 +460,7 @@ public class RowToTurtle {
 	private static int addPoint(OutputStream fos, byte[] buffer, int bufferUse, double longitude, double latitude)
 			throws IOException {
 		bufferUse = add(buffer, POINT, fos, bufferUse);
-		bufferUse = add(buffer, Double.toString(longitude).getBytes(UTF_8), fos,
-				bufferUse);
+		bufferUse = add(buffer, Double.toString(longitude).getBytes(UTF_8), fos, bufferUse);
 		bufferUse = add(buffer, SPACE, fos, bufferUse);
 		bufferUse = add(buffer, Double.toString(latitude).getBytes(UTF_8), fos, bufferUse);
 		bufferUse = add(buffer, CLOSE_POINT, fos, bufferUse);
@@ -529,6 +522,30 @@ public class RowToTurtle {
 		}
 	}
 
+	private static int addAsLiteralStrings(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
+			byte[] predicate, int colId, boolean escape) throws IOException {
+		PqList list = rows.getList(colId);
+		if (list != null && !list.isEmpty()) {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
+			bufferUse = add(buffer, predicate, fos, bufferUse);
+			for (Iterator<String> iterator = list.strings().iterator(); iterator.hasNext();) {
+				String li = iterator.next();
+				if (escape) {
+					li = escapeQuotes(li);
+				}
+				bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
+				bufferUse = add(buffer, li.getBytes(UTF_8), fos, bufferUse);
+				bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
+				if (iterator.hasNext()) {
+					bufferUse = add(buffer, COMMA, fos, bufferUse);
+				}
+			}
+			return bufferUse;
+		} else {
+			return bufferUse;
+		}
+	}
+
 	private static String escapeQuotes(String li) {
 		li = li.replace("\\", "\\\\").replace("\"", "\\\"");
 		return li;
@@ -547,7 +564,7 @@ public class RowToTurtle {
 		}
 	}
 
-	private static int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, int gbifColumnId, boolean gbifidIsLong)
+	private int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, boolean gbifidIsLong)
 			throws IOException {
 		bufferUse = add(buffer, gbifocc, fos, bufferUse);
 
