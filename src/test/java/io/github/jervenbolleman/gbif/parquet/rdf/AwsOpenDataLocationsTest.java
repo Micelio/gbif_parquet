@@ -19,7 +19,7 @@ public class AwsOpenDataLocationsTest {
 
 	@Test
 	void xmlParse() throws ParserConfigurationException, SAXException, IOException {
-		ArrayList<String> list = new ArrayList<String>();
+		ArrayList<String> list = new ArrayList<>();
 		assertNull(AwsOpenDataLocations.parseDocument(xml, list));
 		assertEquals(1, list.size());
 		assertEquals("occurrence/2025-06-01/citation.txt", list.get(0));
