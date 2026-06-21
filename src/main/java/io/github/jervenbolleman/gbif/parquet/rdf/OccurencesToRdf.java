@@ -21,6 +21,7 @@ import java.util.concurrent.Callable;
 import java.util.stream.Stream;
 
 import dev.hardwood.InputFile;
+import dev.hardwood.metadata.LogicalType.TimestampType;
 import dev.hardwood.metadata.PhysicalType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
@@ -126,7 +127,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 		}
 	}
 
-	private int convertFile(Path path1, Instant start, OutputStream fos) {
+	 int convertFile(Path path1, Instant start, OutputStream fos) {
 		Map<KnownColumns, Integer> knownColumnsMap = new EnumMap<>(KnownColumns.class);
 		try {
 			while (Files.isSymbolicLink(path1)) {
@@ -147,8 +148,9 @@ public class OccurencesToRdf implements Callable<Integer> {
 					.build()) {
 				boolean gbifid = schema.getColumn(KnownColumns.gbifid.columnName()).type() == PhysicalType.INT64;
 				boolean taxonIsInt = schema.getColumn(KnownColumns.taxonkey.columnName()).type() == PhysicalType.INT32;
+				boolean dateIsInUtC = schema.getColumn(KnownColumns.eventdate.columnName()).logicalType() instanceof TimestampType tt && tt.isAdjustedToUTC();
 				var toTtl = new RowToTurtle(rows, knownColumnsMap);
-				toTtl.convertRows(rows, fos, taxonIsInt, gbifid);
+				toTtl.convertRows(rows, fos, taxonIsInt, gbifid, dateIsInUtC);
 			}
 			logTime(path1, start, startFile);
 		} catch (IOException e) {

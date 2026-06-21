@@ -7,11 +7,13 @@ import java.io.OutputStream;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.locationtech.jts.geom.Coordinate;
@@ -152,35 +154,53 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 				getColumnId(knownColumnsMap, KnownColumns.infraspecificepithet));
 	}
 
-	void convertRows(RowReader rows, OutputStream fos, boolean taxonIsInt, boolean gbifidIsLong)
+	void convertRows(RowReader rows, OutputStream fos, boolean taxonIsInt, boolean gbifidIsLong, boolean dateIsInUtC)
 			throws IOException, NoSuchAlgorithmException {
 		byte[] buffer = new byte[BUFFER_SIZE];
 		int bufferUse = 0;
 		MutableRoaringBitmap seenTaxons = new MutableRoaringBitmap();
-		
+
 		Digester digester = new Digester();
+		BiFunction<StructAccessor, Integer, byte[]> dt;
+		if (dateIsInUtC) {
+			dt = (s, colid) -> fromTimestampToXsdDate(s, colid);
+		} else {
+			dt = (s, colid) -> fromLocalToXsdDate(s, colid);
+		}
 		while (rows.hasNext()) {
 			rows.next();
-			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifidIsLong);
+			byte[] gbifid = getGBIFid(rows, gbifidIsLong);
+
+			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifid);
 
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, occurrenceStatus, occurenceStatusColId, false);
 			bufferUse = addAsInteger(rows, fos, buffer, bufferUse, individualCount, individualCountColId);
 			bufferUse = addAsRawString(rows, fos, buffer, bufferUse, publishingOrgKey, publishingorgkeyColId);
 			bufferUse = addCoordinates(rows, fos, buffer, bufferUse);
-			bufferUse = addDate(rows, fos, buffer, bufferUse);
-			bufferUse = andRecordData(rows, fos, buffer, bufferUse);
+			bufferUse = addDate(rows, fos, buffer, bufferUse, dt);
+			bufferUse = andRecordData(rows, fos, buffer, bufferUse,dt);
 			bufferUse = addLicense(rows, fos, buffer, bufferUse);
 			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxonIsInt);
-			bufferUse = addLocation(rows, fos, buffer, bufferUse, digester);
+			bufferUse = addLocation(rows, fos, buffer, bufferUse, digester, gbifid);
 		}
 		fos.write(buffer, 0, bufferUse);
 	}
 
-	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Digester digester) throws IOException {
+	private byte[] getGBIFid(RowReader rows, boolean gbifidIsLong) {
+		byte[] gbifid;
+		if (gbifidIsLong) {
+			gbifid = Long.toString(rows.getLong(gbifColumnId)).getBytes(UTF_8);
+		} else {
+			gbifid = rows.getBinary(gbifColumnId);
+		}
+		return gbifid;
+	}
+
+	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Digester digester, byte[] gbifid)
+			throws IOException {
 		if (hasColumn(rows, countryCodeColId)) {
 			String cc = rows.getString(countryCodeColId);
 			bufferUse = add(buffer, gbifocc, fos, bufferUse);
-			byte[] gbifid = rows.getString(gbifColumnId).getBytes(UTF_8);
 			bufferUse = add(buffer, gbifid, fos, bufferUse);
 			bufferUse = add(buffer, inDescribedPlace, fos, bufferUse);
 			String stateProvinceS = null;
@@ -215,8 +235,6 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		}
 		return bufferUse;
 	}
-
-	
 
 	static String escape(String string) {
 		return string.replace("\\", "\\\\");
@@ -255,7 +273,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	}
 
 	private static boolean hasColumn(RowReader rows, int colId) {
-		return colId < 0 || !rows.isNull(colId);
+		return colId > 0 && !rows.isNull(colId);
 	}
 
 	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
@@ -293,8 +311,6 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 
 	private int addLicense(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
 		if (hasColumn(rows, licenseColId)) {
-			return bufferUse;
-		} else {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, license, fos, bufferUse);
 			switch (rows.getString(licenseColId)) {
@@ -310,15 +326,15 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			default:
 				throw new IOException("Unknown license: " + rows.getString(licenseColId));
 			}
-			return bufferUse;
 		}
+		return bufferUse;
 	}
 
 	private static int getColumnId(Map<KnownColumns, Integer> knownColumnsMap, KnownColumns kc) {
 		return knownColumnsMap.getOrDefault(kc, -404);
 	}
 
-	private int andRecordData(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
+	private int andRecordData(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, BiFunction<StructAccessor, Integer, byte[]> dt) throws IOException {
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, basisOfRecord, basisOfRecordColId, false);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, institutioncode, institutioncodeColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeColId, true);
@@ -326,14 +342,14 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordnumber, recordnumberColId, true);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, identifiedby, identifiedbyColId, true);
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, dateidentified, dateidentifiedColId, XSD_DATE,
-				(s) -> fromTimestampToXsdDate(s, dateidentifiedColId));
+				(s) -> dt.apply(s, dateidentifiedColId));
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordedby, recordedbyColId, true);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, typestatus, typestatusColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, establishmentmeans, establishmentmeansColId,
 				false);
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, lastinterpreted, lastinterpretedColId, XSD_DATE,
-				(s) -> fromTimestampToXsdDate(s, lastinterpretedColId));
+				(s) -> dt.apply(s, lastinterpretedColId));
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, mediatype, mediatypeColId, false);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, issue, issueColId, true);
 		return bufferUse;
@@ -345,19 +361,23 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return DateTimeFormatter.ISO_LOCAL_DATE.format(localD).getBytes(UTF_8);
 	}
 
+	private static byte[] fromLocalToXsdDate(StructAccessor s, int colId) {
+		LocalDateTime localD = s.getLocalTimestamp(colId);
+		return DateTimeFormatter.ISO_LOCAL_DATE.format(localD).getBytes(UTF_8);
+	}
+	
 	private static byte[] fromVarCharToXsdDate(StructAccessor s, int eventdateId) {
 		return Arrays.copyOf(s.getBinary(eventdateId), 10);
 	}
 
-	private int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateColId, XSD_DATE,
-				(s) -> fromTimestampToXsdDate(s, eventdateColId));
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayColId, XSD_GDAY, (s) -> intToGday(dayColId, s));
+	private int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, BiFunction<StructAccessor, Integer, byte[]> dt) throws IOException {
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateColId, XSD_DATE, (s)->dt.apply(s, eventdateColId));
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayColId, XSD_GDAY,
+				(s) -> intToGday(dayColId, s));
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, month, monthColId, XSD_GMONTH,
 				(s) -> intToGMonth(monthColId, s));
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, year, yearColId, XSD_GYEAR, (s) -> 
-			Integer.toString(s.getInt(yearColId)).getBytes(UTF_8)
-		);
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, year, yearColId, XSD_GYEAR,
+				(s) -> Integer.toString(s.getInt(yearColId)).getBytes(UTF_8));
 		return bufferUse;
 	}
 
@@ -382,16 +402,14 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static int addAsDatatypeString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
 			byte[] predicate, int colId, byte[] datatype, Function<StructAccessor, byte[]> extractor)
 			throws IOException {
-		if (colId < 0 || rows.isNull(colId)) {
-			return bufferUse;
-		} else {
+		if (hasColumn(rows, colId)) {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			bufferUse = add(buffer, OPEN_LITERAL, fos, bufferUse);
 			bufferUse = add(buffer, extractor.apply(rows), fos, bufferUse);
 			bufferUse = add(buffer, datatype, fos, bufferUse);
-			return bufferUse;
 		}
+		return bufferUse;
 	}
 
 	private int addCoordinates(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
@@ -477,8 +495,6 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static int addAsLiteralString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
 			byte[] predicate, int colId, boolean escape) throws IOException {
 		if (hasColumn(rows, colId)) {
-			return bufferUse;
-		} else {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
@@ -490,32 +506,32 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 				bufferUse = add(buffer, rows.getBinary(colId), fos, bufferUse);
 			}
 			bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
-			return bufferUse;
 		}
+		return bufferUse;
 	}
 
 	private static int addAsLiteralStrings(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
 			byte[] predicate, int colId, boolean escape) throws IOException {
-		PqList list = rows.getList(colId);
-		if (list != null && !list.isEmpty()) {
-			bufferUse = add(buffer, PREB, fos, bufferUse);
-			bufferUse = add(buffer, predicate, fos, bufferUse);
-			for (Iterator<String> iterator = list.strings().iterator(); iterator.hasNext();) {
-				String li = iterator.next();
-				if (escape) {
-					li = escapeQuotes(li);
-				}
-				bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
-				bufferUse = add(buffer, li.getBytes(UTF_8), fos, bufferUse);
-				bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
-				if (iterator.hasNext()) {
-					bufferUse = add(buffer, COMMA, fos, bufferUse);
+		if (colId > 0) {
+			PqList list = rows.getList(colId);
+			if (list != null && !list.isEmpty()) {
+				bufferUse = add(buffer, PREB, fos, bufferUse);
+				bufferUse = add(buffer, predicate, fos, bufferUse);
+				for (Iterator<String> iterator = list.strings().iterator(); iterator.hasNext();) {
+					String li = iterator.next();
+					if (escape) {
+						li = escapeQuotes(li);
+					}
+					bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
+					bufferUse = add(buffer, li.getBytes(UTF_8), fos, bufferUse);
+					bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
+					if (iterator.hasNext()) {
+						bufferUse = add(buffer, COMMA, fos, bufferUse);
+					}
 				}
 			}
-			return bufferUse;
-		} else {
-			return bufferUse;
 		}
+		return bufferUse;
 	}
 
 	private static String escapeQuotes(String li) {
@@ -525,27 +541,20 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 
 	private static int addAsDouble(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
 			int colId) throws IOException {
-		if (colId < 0 || rows.isNull(colId)) {
-			return bufferUse;
-		} else {
+		if (hasColumn(rows, colId)) {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			bufferUse = add(buffer, OPEN_LITERAL, fos, bufferUse);
 			bufferUse = add(buffer, Double.toString(rows.getDouble(colId)).getBytes(UTF_8), fos, bufferUse);
-			return closeDouble(buffer, fos, bufferUse);
+			bufferUse = closeDouble(buffer, fos, bufferUse);
 		}
+		return bufferUse;
 	}
 
-	private int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, boolean gbifidIsLong)
+	private int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid)
 			throws IOException {
 		bufferUse = add(buffer, gbifocc, fos, bufferUse);
 
-		byte[] gbifid;
-		if (gbifidIsLong) {
-			gbifid = Long.toString(rows.getLong(gbifColumnId)).getBytes(UTF_8);
-		} else {
-			gbifid = rows.getBinary(gbifColumnId);
-		}
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
 
 		bufferUse = add(buffer, isOccurrence, fos, bufferUse);
@@ -564,11 +573,11 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	}
 
 	private static int addAsInteger(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
-			int individualCountId) throws IOException {
-		if (!rows.isNull(individualCountId)) {
+			int colId) throws IOException {
+		if (hasColumn(rows, colId)) {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
-			int int1 = rows.getInt(individualCountId);
+			int int1 = rows.getInt(colId);
 			bufferUse = add(buffer, int1, fos, bufferUse);
 		}
 		return bufferUse;
