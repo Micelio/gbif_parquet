@@ -8,7 +8,7 @@
 	<artifactId>gbif_parquet</artifactId>
 	<packaging>jar</packaging>
 	<name>OccurenceToRdf</name>
-	<version>0.3.0-SNAPSHOT</version>
+	<version>0.4.0-SNAPSHOT</version>
 
 	<description>Translate GBIF simple occurences parquet files to Turtle</description>
 	<url>https://github.com/Micello/gbif_parquet</url>
