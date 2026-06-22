@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -43,10 +45,13 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] XSD_GYEAR = "\"^^xsd:gYear".getBytes(UTF_8);
 
 	private static final byte[] POINT = "wdt:P625 \"Point(".getBytes(UTF_8);
-	private static final byte[] GEOMETRY_POLYGON = "geo:hasGeometry [ geo:asWKT \"POLYGON((".getBytes(UTF_8);
+	private static final byte[] nlxyu = "nl:xyu-".getBytes(UTF_8);
+	private static final byte[] hasGeometry = "geo:hasGeometry".getBytes(UTF_8);
+//	private static final byte[] GEOMETRY_POLYGON = "geo:hasGeometry [ geo:asWKT \"POLYGON((".getBytes(UTF_8);
+	private static final byte[] asWKT_POLYGON = "geo:asWKT \"POLYGON((".getBytes(UTF_8);
 	private static final byte[] SPACE = " ".getBytes(UTF_8);
 	private static final byte[] CLOSE_POINT = ")\"^^geo:wktLiteral ".getBytes(UTF_8);
-	private static final byte[] CLOSE_GEOMETRY_POLYGON = "))\"^^geo:wktLiteral ] ".getBytes(UTF_8);
+	private static final byte[] CLOSE_GEOMETRY_POLYGON = "))\"^^geo:wktLiteral ".getBytes(UTF_8);
 	private static final byte[] END_TRIPLE_BLOCK = " .\n".getBytes(UTF_8);
 	private static final byte[] CLOSE_LITERAL = "\"".getBytes(UTF_8);
 	private static final String PRE = ";\n  ";
@@ -56,6 +61,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] closeDoubleLiteral = "\"^^xsd:double ".getBytes(UTF_8);
 	private static final byte[] gbifocc = "gbifocc:".getBytes(UTF_8);
 	private static final byte[] gbifsp = "gbifsp:".getBytes(UTF_8);
+	private static final byte[] gbiftermPrefix = "gbifterm:".getBytes(UTF_8);
 	private static final byte[] isOccurrence = (" a dwc:Occurrence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
 	private static final byte[] occurrenceStatus = ("dwc:occurrenceStatus ").getBytes(UTF_8);
 	private static final byte[] individualCount = ("dwc:individualCount ").getBytes(UTF_8);
@@ -104,7 +110,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] stateProvince = ("dwc:stateProvince ").getBytes(UTF_8);
 	private static final byte[] localityLabel = ("rdfs:label ").getBytes(UTF_8);
 	private static final byte[] STRING_DELIM = "\"".getBytes(UTF_8);
-	private static final byte[] verbatimscientificnameauthorship = (" dwc:verbatimScientificNameAuthorship ")
+	private static final byte[] verbatimscientificnameauthorship = ("dwc:verbatimScientificNameAuthorship ")
 			.getBytes(UTF_8);
 
 	private static final byte[] CC_BY_4_0 = "ccby4: ".getBytes(UTF_8);
@@ -169,6 +175,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		}
 		while (rows.hasNext()) {
 			rows.next();
+
 			byte[] gbifid = getGBIFid(rows, gbifidIsLong);
 
 			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifid);
@@ -176,9 +183,9 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, occurrenceStatus, occurenceStatusColId, false);
 			bufferUse = addAsInteger(rows, fos, buffer, bufferUse, individualCount, individualCountColId);
 			bufferUse = addAsRawString(rows, fos, buffer, bufferUse, publishingOrgKey, publishingorgkeyColId);
-			bufferUse = addCoordinates(rows, fos, buffer, bufferUse);
+			bufferUse = addCoordinates(rows, fos, buffer, bufferUse, digester, gbifid);
 			bufferUse = addDate(rows, fos, buffer, bufferUse, dt);
-			bufferUse = andRecordData(rows, fos, buffer, bufferUse,dt);
+			bufferUse = andRecordData(rows, fos, buffer, bufferUse, dt);
 			bufferUse = addLicense(rows, fos, buffer, bufferUse);
 			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxonIsInt);
 			bufferUse = addLocation(rows, fos, buffer, bufferUse, digester, gbifid);
@@ -196,13 +203,13 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return gbifid;
 	}
 
-	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Digester digester, byte[] gbifid)
-			throws IOException {
+	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Digester digester,
+			byte[] gbifid) throws IOException {
 		if (hasColumn(rows, countryCodeColId)) {
-			String cc = rows.getString(countryCodeColId);
 			bufferUse = add(buffer, gbifocc, fos, bufferUse);
 			bufferUse = add(buffer, gbifid, fos, bufferUse);
 			bufferUse = add(buffer, inDescribedPlace, fos, bufferUse);
+			String cc = rows.getString(countryCodeColId);
 			String stateProvinceS = null;
 			String localityCodeS = null;
 			byte[] locIri;
@@ -223,7 +230,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = add(buffer, locIri, fos, bufferUse);
 			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 			bufferUse = add(buffer, locIri, fos, bufferUse);
-			bufferUse = add(buffer, " a dwc:Location\n ".getBytes(UTF_8), fos, bufferUse);
+			bufferUse = add(buffer, " a dwc:Location ".getBytes(UTF_8), fos, bufferUse);
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeColId, true);
 			if (stateProvinceS != null) {
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, stateProvince, stateProvinceColId, true);
@@ -291,7 +298,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, order, orderColId, false);
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, family, familyColId, false);
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, genus, genusColId, false);
-				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, taxonrank, taxonrankColId, false);
+				bufferUse = addTaxonRank(rows, fos, buffer, bufferUse);
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, verbatimscientificnameauthorship,
 						verbatimscientificnameauthorshipColId, true);
 				if (taxa != null) {
@@ -301,10 +308,22 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 					bufferUse = add(buffer, PREB, fos, bufferUse);
 					bufferUse = add(buffer, subclassof, fos, bufferUse);
 					bufferUse = add(buffer, gbifsp, fos, bufferUse);
+					bufferUse = add(buffer, taxa.getBytes(UTF_8), fos, bufferUse);
 				}
 				bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 				return bufferUse;
 			}
+		}
+		return bufferUse;
+	}
+
+	private int addTaxonRank(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
+		if (hasColumn(rows, taxonrankColId)) {
+			bufferUse = add(buffer, PREB, fos, bufferUse);
+			bufferUse = add(buffer, taxonrank, fos, bufferUse);
+			bufferUse = add(buffer, gbiftermPrefix, fos, bufferUse);
+			String taxonRank = rows.getString(taxonrankColId).toLowerCase(Locale.US);
+			bufferUse = add(buffer, taxonRank.getBytes(UTF_8), fos, bufferUse);
 		}
 		return bufferUse;
 	}
@@ -334,7 +353,8 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return knownColumnsMap.getOrDefault(kc, -404);
 	}
 
-	private int andRecordData(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, BiFunction<StructAccessor, Integer, byte[]> dt) throws IOException {
+	private int andRecordData(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
+			BiFunction<StructAccessor, Integer, byte[]> dt) throws IOException {
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, basisOfRecord, basisOfRecordColId, false);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, institutioncode, institutioncodeColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, collectioncode, collectioncodeColId, true);
@@ -365,13 +385,15 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		LocalDateTime localD = s.getLocalTimestamp(colId);
 		return DateTimeFormatter.ISO_LOCAL_DATE.format(localD).getBytes(UTF_8);
 	}
-	
+
 	private static byte[] fromVarCharToXsdDate(StructAccessor s, int eventdateId) {
 		return Arrays.copyOf(s.getBinary(eventdateId), 10);
 	}
 
-	private int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, BiFunction<StructAccessor, Integer, byte[]> dt) throws IOException {
-		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateColId, XSD_DATE, (s)->dt.apply(s, eventdateColId));
+	private int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
+			BiFunction<StructAccessor, Integer, byte[]> dt) throws IOException {
+		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateColId, XSD_DATE,
+				(s) -> dt.apply(s, eventdateColId));
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayColId, XSD_GDAY,
 				(s) -> intToGday(dayColId, s));
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, month, monthColId, XSD_GMONTH,
@@ -412,7 +434,8 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return bufferUse;
 	}
 
-	private int addCoordinates(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse) throws IOException {
+	private int addCoordinates(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Digester digester,
+			byte[] gbifid) throws IOException {
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, decimalLatitude, decimallatitudeColId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, decimalLongitude, decimalLongitudeColId);
 		bufferUse = addAsDouble(rows, fos, buffer, bufferUse, coordinateUncertaintyInMeters,
@@ -442,16 +465,25 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 					: rows.getDouble(coordinateUncertaintyInMetersColId) / 111320.0;
 			if (radius > 0.0 && latitude + radius <= 90.0 && latitude - radius >= -90.0 && longitude + radius <= 180.0
 					&& longitude - radius >= -180.0) {
-				bufferUse = add(buffer, PREB, fos, bufferUse);
-				bufferUse = addCircle(fos, buffer, bufferUse, longitude, latitude, radius);
+
+				bufferUse = addCircle(fos, buffer, bufferUse, longitude, latitude, radius, digester, gbifid);
 			}
 		}
 		return bufferUse;
 	}
 
 	private static int addCircle(OutputStream fos, byte[] buffer, int bufferUse, double longitude, double latitude,
-			double uncertaintity) throws IOException {
-		bufferUse = add(buffer, GEOMETRY_POLYGON, fos, bufferUse);
+			double uncertaintity, Digester digester, byte[] gbifid) throws IOException {
+		ByteBuffer bb = ByteBuffer.allocate(Double.BYTES * 3);
+		bb.asDoubleBuffer().put(0, longitude);
+		bb.asDoubleBuffer().put(1, latitude);
+		bb.asDoubleBuffer().put(2, uncertaintity);
+		byte[] xyu = digester.digest(bb.array());
+		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
+//		bufferUse = add(buffer, nlxyu, fos, bufferUse);
+		bufferUse = add(buffer, xyu, fos, bufferUse);
+		bufferUse = add(buffer, SPACE, fos, bufferUse);
+		bufferUse = add(buffer, asWKT_POLYGON, fos, bufferUse);
 		GeometricShapeFactory shapeFactory = new GeometricShapeFactory();
 		shapeFactory.setNumPoints(32);
 		shapeFactory.setCentre(new Coordinate(longitude, latitude));
@@ -468,6 +500,15 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			}
 		}
 		bufferUse = add(buffer, CLOSE_GEOMETRY_POLYGON, fos, bufferUse);
+		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
+
+		bufferUse = add(buffer, gbifocc, fos, bufferUse);
+		bufferUse = add(buffer, gbifid, fos, bufferUse);
+		bufferUse = add(buffer, SPACE, fos, bufferUse);
+		bufferUse = add(buffer, hasGeometry, fos, bufferUse);
+		bufferUse = add(buffer, SPACE, fos, bufferUse);
+//		bufferUse = add(buffer, nlxyu, fos, bufferUse);
+		bufferUse = add(buffer, xyu, fos, bufferUse);
 		return bufferUse;
 	}
 
@@ -483,12 +524,12 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 
 	private static int addAsRawString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
 			int colId) throws IOException {
-		if (rows.isNull(colId)) {
+		if (hasColumn(rows, colId)) {
 			return bufferUse;
 		} else {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, predicate, fos, bufferUse);
-			return add(buffer, rows.getString(colId).getBytes(UTF_8), fos, bufferUse);
+			return add(buffer, rows.getBinary(colId), fos, bufferUse);
 		}
 	}
 
@@ -499,9 +540,8 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = add(buffer, predicate, fos, bufferUse);
 			bufferUse = add(buffer, STRING_DELIM, fos, bufferUse);
 			if (escape) {
-				String toPrint = rows.getString(colId);
-				toPrint = escapeQuotes(toPrint);
-				bufferUse = add(buffer, toPrint.getBytes(UTF_8), fos, bufferUse);
+				byte[] toPrint = escapeQuotes(rows.getString(colId)).getBytes(UTF_8);
+				bufferUse = add(buffer, toPrint, fos, bufferUse);
 			} else {
 				bufferUse = add(buffer, rows.getBinary(colId), fos, bufferUse);
 			}
@@ -535,8 +575,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	}
 
 	private static String escapeQuotes(String li) {
-		li = li.replace("\\", "\\\\").replace("\"", "\\\"");
-		return li;
+		return li.replace("\\", "\\\\").replace("\"", "\\\"");
 	}
 
 	private static int addAsDouble(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
@@ -554,9 +593,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid)
 			throws IOException {
 		bufferUse = add(buffer, gbifocc, fos, bufferUse);
-
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
-
 		bufferUse = add(buffer, isOccurrence, fos, bufferUse);
 		bufferUse = add(buffer, OPEN_LITERAL, fos, bufferUse);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
