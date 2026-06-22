@@ -21,6 +21,7 @@ import java.util.concurrent.Callable;
 import java.util.stream.Stream;
 
 import dev.hardwood.InputFile;
+import dev.hardwood.metadata.LogicalType.TimestampType;
 import dev.hardwood.metadata.PhysicalType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
@@ -37,6 +38,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 	private static final byte[] PREFIXES = """
 			PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 			PREFIX gbifocc: <https://www.gbif.org/occurrence/>
+			PREFIX ogc: <http://www.opengis.net/rdf#>
 			PREFIX gbifterm: <http://rs.gbif.org/terms/1.0/>
 			PREFIX gbifds: <https://www.gbif.org/dataset/>
 			PREFIX gbifsp: <https://www.gbif.org/species/>
@@ -50,9 +52,10 @@ public class OccurencesToRdf implements Callable<Integer> {
 			PREFIX ccby4nc: <https://creativecommons.org/licenses/by-nc/4.0/>
 			PREFIX cc0: <https://creativecommons.org/publicdomain/zero/1.0/>
 			PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+			PREFIX osmrel: <https://www.openstreetmap.org/relation/>
 				""".getBytes(UTF_8);
 
-	private static final  System.Logger log =  System.getLogger(OccurencesToRdf.class.getName());
+	private static final System.Logger log = System.getLogger(OccurencesToRdf.class.getName());
 
 	@Option(names = { "--year" }, description = "Year", required = true)
 	public String year;
@@ -62,11 +65,11 @@ public class OccurencesToRdf implements Callable<Integer> {
 
 	@Option(names = { "--output", "-o" }, description = "Where to write to")
 	public File output = new File("/dev/stdout");
-	
-	@Option(names = { "--s3secret"}, description = "S3 Secret for the User that has access to the files/bucket")
+
+	@Option(names = { "--s3secret" }, description = "S3 Secret for the User that has access to the files/bucket")
 	public String s3secret;
-	
-	@Option(names = { "--s3user"}, description = "S3 User that has access to the files/bucket")
+
+	@Option(names = { "--s3user" }, description = "S3 User that has access to the files/bucket")
 	public String s3user;
 
 	@Option(names = { "-d", "--aws" }, description = "Retrieve read parquet files from AWS S3", defaultValue = "false")
@@ -93,8 +96,8 @@ public class OccurencesToRdf implements Callable<Integer> {
 			log.log(Level.ERROR, "Would like to use streaming from S3 bucket: but that is not implemented yet");
 			log.log(Level.ERROR, "Check https://github.com/hardwood-hq/hardwood/issues/519");
 			List<String> files = closestS3Location.list(year, month);
-			log.log(Level.INFO, "Would parse " +files.size() + " files");
-			try (Stream<Path> list = closestS3Location.download(files, year, month)){
+			log.log(Level.INFO, "Would parse " + files.size() + " files");
+			try (Stream<Path> list = closestS3Location.download(files, year, month)) {
 				return convertFiles(list);
 			} catch (IOException e) {
 				return 1;
@@ -126,7 +129,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 		}
 	}
 
-	private int convertFile(Path path1, Instant start, OutputStream fos) {
+	 int convertFile(Path path1, Instant start, OutputStream fos) {
 		Map<KnownColumns, Integer> knownColumnsMap = new EnumMap<>(KnownColumns.class);
 		try {
 			while (Files.isSymbolicLink(path1)) {
@@ -137,19 +140,20 @@ public class OccurencesToRdf implements Callable<Integer> {
 			return 4;
 		}
 
-		try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(path1))) {
+		try (InputFile inf = InputFile.of(path1); ParquetFileReader reader = ParquetFileReader.open(inf)) {
 			Instant startFile = Instant.now();
 			FileSchema schema = reader.getFileSchema();
 			mapKnownColumnsToIds(knownColumnsMap, schema);
-			RowReader rows = reader.buildRowReader()
+			try (RowReader rows = reader.buildRowReader()
 					.projection(ColumnProjection.columns(
 							Arrays.stream(KnownColumns.values()).map(KnownColumns::columnName).toArray(String[]::new)))
-					.build();
-
-			
-			boolean gbifid = schema.getColumn(KnownColumns.gbifid.columnName()).type() == PhysicalType.INT64;
-			boolean taxonIsInt = schema.getColumn(KnownColumns.taxonkey.columnName()).type() == PhysicalType.INT32;
-			RowToTurtle.convertRows(rows, knownColumnsMap, fos, taxonIsInt, gbifid);
+					.build()) {
+				boolean gbifid = schema.getColumn(KnownColumns.gbifid.columnName()).type() == PhysicalType.INT64;
+				boolean taxonIsInt = schema.getColumn(KnownColumns.taxonkey.columnName()).type() == PhysicalType.INT32;
+				boolean dateIsInUtC = schema.getColumn(KnownColumns.eventdate.columnName()).logicalType() instanceof TimestampType tt && tt.isAdjustedToUTC();
+				var toTtl = new RowToTurtle(rows, knownColumnsMap);
+				toTtl.convertRows(rows, fos, taxonIsInt, gbifid, dateIsInUtC);
+			}
 			logTime(path1, start, startFile);
 		} catch (IOException e) {
 			log.log(Level.ERROR, "Error reading file: " + path1, e);

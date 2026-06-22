@@ -5,7 +5,7 @@ To convert GBIF occurences into turlte
 
 ```
 mvn package -Puber
-java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED -jar target/gbif_parquet-0.3.0-SNAPSHOT-jar-with-dependencies.jar --year 2026 --month 01 --aws --output /dev/stdout
+java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED -jar target/gbif_parquet-0.4.0-SNAPSHOT-jar-with-dependencies.jar --year 2026 --month 01 --aws --output /dev/stdout
 ```
 Although the two options `--enable-native-access=ALL-UNNAMED` and `--add-modules jdk.incubator.vector` are optional.
 The option `--aws` downloads the files from AWS OpenData if they are not locally present yet.
