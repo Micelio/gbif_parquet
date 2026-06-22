@@ -11,7 +11,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
@@ -45,9 +44,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] XSD_GYEAR = "\"^^xsd:gYear".getBytes(UTF_8);
 
 	private static final byte[] POINT = "wdt:P625 \"Point(".getBytes(UTF_8);
-	private static final byte[] nlxyu = "nl:xyu-".getBytes(UTF_8);
 	private static final byte[] hasGeometry = "geo:hasGeometry".getBytes(UTF_8);
-//	private static final byte[] GEOMETRY_POLYGON = "geo:hasGeometry [ geo:asWKT \"POLYGON((".getBytes(UTF_8);
 	private static final byte[] asWKT_POLYGON = "geo:asWKT \"POLYGON((".getBytes(UTF_8);
 	private static final byte[] SPACE = " ".getBytes(UTF_8);
 	private static final byte[] CLOSE_POINT = ")\"^^geo:wktLiteral ".getBytes(UTF_8);
@@ -59,9 +56,9 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] subclassof = ("rdfs:subClassOf ").getBytes(UTF_8);
 	private static final byte[] countryCode = ("dwc:countryCode ").getBytes(UTF_8);
 	private static final byte[] closeDoubleLiteral = "\"^^xsd:double ".getBytes(UTF_8);
-	private static final byte[] gbifocc = "gbifocc:".getBytes(UTF_8);
-	private static final byte[] gbifsp = "gbifsp:".getBytes(UTF_8);
-	private static final byte[] gbiftermPrefix = "gbifterm:".getBytes(UTF_8);
+	private static final byte[] GBIFOCC_PREFIX = "gbifocc:".getBytes(UTF_8);
+	private static final byte[] GBIFSP_PREFIX = "gbifsp:".getBytes(UTF_8);
+	private static final byte[] GBIFTERM_PREFIX = "gbifterm:".getBytes(UTF_8);
 	private static final byte[] isOccurrence = (" a dwc:Occurrence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
 	private static final byte[] occurrenceStatus = ("dwc:occurrenceStatus ").getBytes(UTF_8);
 	private static final byte[] individualCount = ("dwc:individualCount ").getBytes(UTF_8);
@@ -206,7 +203,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private int addLocation(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Digester digester,
 			byte[] gbifid) throws IOException {
 		if (hasColumn(rows, countryCodeColId)) {
-			bufferUse = add(buffer, gbifocc, fos, bufferUse);
+			bufferUse = add(buffer, GBIFOCC_PREFIX, fos, bufferUse);
 			bufferUse = add(buffer, gbifid, fos, bufferUse);
 			bufferUse = add(buffer, inDescribedPlace, fos, bufferUse);
 			String cc = rows.getString(countryCodeColId);
@@ -288,7 +285,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		if (taxon != null) {
 			int taxonInt = Integer.parseInt(taxon);
 			if (seenTaxons.checkedAdd(taxonInt)) {
-				bufferUse = add(buffer, gbifsp, fos, bufferUse);
+				bufferUse = add(buffer, GBIFSP_PREFIX, fos, bufferUse);
 				bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 				bufferUse = add(buffer, " a dwc:Taxon ".getBytes(), fos, bufferUse);
 
@@ -307,7 +304,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 							infraspecificepithetColId, true);
 					bufferUse = add(buffer, PREB, fos, bufferUse);
 					bufferUse = add(buffer, subclassof, fos, bufferUse);
-					bufferUse = add(buffer, gbifsp, fos, bufferUse);
+					bufferUse = add(buffer, GBIFSP_PREFIX, fos, bufferUse);
 					bufferUse = add(buffer, taxa.getBytes(UTF_8), fos, bufferUse);
 				}
 				bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
@@ -321,7 +318,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		if (hasColumn(rows, taxonrankColId)) {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, taxonrank, fos, bufferUse);
-			bufferUse = add(buffer, gbiftermPrefix, fos, bufferUse);
+			bufferUse = add(buffer, GBIFTERM_PREFIX, fos, bufferUse);
 			String taxonRank = rows.getString(taxonrankColId).toLowerCase(Locale.US);
 			bufferUse = add(buffer, taxonRank.getBytes(UTF_8), fos, bufferUse);
 		}
@@ -384,10 +381,6 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static byte[] fromLocalToXsdDate(StructAccessor s, int colId) {
 		LocalDateTime localD = s.getLocalTimestamp(colId);
 		return DateTimeFormatter.ISO_LOCAL_DATE.format(localD).getBytes(UTF_8);
-	}
-
-	private static byte[] fromVarCharToXsdDate(StructAccessor s, int eventdateId) {
-		return Arrays.copyOf(s.getBinary(eventdateId), 10);
 	}
 
 	private int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
@@ -502,7 +495,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		bufferUse = add(buffer, CLOSE_GEOMETRY_POLYGON, fos, bufferUse);
 		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 
-		bufferUse = add(buffer, gbifocc, fos, bufferUse);
+		bufferUse = add(buffer, GBIFOCC_PREFIX, fos, bufferUse);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
 		bufferUse = add(buffer, SPACE, fos, bufferUse);
 		bufferUse = add(buffer, hasGeometry, fos, bufferUse);
@@ -592,7 +585,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 
 	private int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid)
 			throws IOException {
-		bufferUse = add(buffer, gbifocc, fos, bufferUse);
+		bufferUse = add(buffer, GBIFOCC_PREFIX, fos, bufferUse);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
 		bufferUse = add(buffer, isOccurrence, fos, bufferUse);
 		bufferUse = add(buffer, OPEN_LITERAL, fos, bufferUse);
