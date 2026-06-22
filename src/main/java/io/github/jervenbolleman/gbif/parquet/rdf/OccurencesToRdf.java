@@ -38,6 +38,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 	private static final byte[] PREFIXES = """
 			PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 			PREFIX gbifocc: <https://www.gbif.org/occurrence/>
+			PREFIX ogc: <http://www.opengis.net/rdf#>
 			PREFIX gbifterm: <http://rs.gbif.org/terms/1.0/>
 			PREFIX gbifds: <https://www.gbif.org/dataset/>
 			PREFIX gbifsp: <https://www.gbif.org/species/>
@@ -51,6 +52,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 			PREFIX ccby4nc: <https://creativecommons.org/licenses/by-nc/4.0/>
 			PREFIX cc0: <https://creativecommons.org/publicdomain/zero/1.0/>
 			PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+			PREFIX osmrel: <https://www.openstreetmap.org/relation/>
 				""".getBytes(UTF_8);
 
 	private static final System.Logger log = System.getLogger(OccurencesToRdf.class.getName());

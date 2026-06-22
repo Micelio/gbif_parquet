@@ -59,7 +59,8 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] GBIFOCC_PREFIX = "gbifocc:".getBytes(UTF_8);
 	private static final byte[] GBIFSP_PREFIX = "gbifsp:".getBytes(UTF_8);
 	private static final byte[] GBIFTERM_PREFIX = "gbifterm:".getBytes(UTF_8);
-	private static final byte[] isOccurrence = (" a dwc:Occurrence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
+	private static final byte[] OSMREL_PREFIX = "osmrel:".getBytes(UTF_8);
+ 	private static final byte[] isOccurrence = (" a dwc:Occurrence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
 	private static final byte[] occurrenceStatus = ("dwc:occurrenceStatus ").getBytes(UTF_8);
 	private static final byte[] individualCount = ("dwc:individualCount ").getBytes(UTF_8);
 	private static final byte[] publishingOrgKey = ("dwc:publishingOrgKey gbifpub:").getBytes(UTF_8);
@@ -93,7 +94,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] mediatype = ("dwc:mediaType ").getBytes(UTF_8);
 	private static final byte[] issue = ("dwc:issue ").getBytes(UTF_8);
 	private static final byte[] toTaxon = ("dwciri:toTaxon gbifsp:").getBytes(UTF_8);
-
+	private static final byte[] sfWithin = "geo:sfWithin".getBytes(UTF_8);
 	private static final byte[] kingdom = ("dwc:kingdom ").getBytes(UTF_8);
 	private static final byte[] phylum = ("dwc:phylum ").getBytes(UTF_8);
 	private static final byte[] clazz = ("dwc:class ").getBytes(UTF_8);
@@ -228,6 +229,14 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
 			bufferUse = add(buffer, locIri, fos, bufferUse);
 			bufferUse = add(buffer, " a dwc:Location ".getBytes(UTF_8), fos, bufferUse);
+			Country byIso = Country.byIso(cc);
+			if (byIso != null) {
+				bufferUse = add(buffer, PREB, fos, bufferUse);
+				bufferUse = add(buffer, sfWithin, fos, bufferUse);
+				bufferUse = add(buffer, SPACE, fos, bufferUse);
+				bufferUse = add(buffer, OSMREL_PREFIX, fos, bufferUse);
+				bufferUse = add(buffer, byIso.idBytes(), fos, bufferUse);		
+			}
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeColId, true);
 			if (stateProvinceS != null) {
 				bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, stateProvince, stateProvinceColId, true);
