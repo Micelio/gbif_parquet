@@ -35,13 +35,14 @@ import picocli.CommandLine.Option;
 @Command(name = "occurences-to-rdf", description = "Convert GBIF occurrence parquet files to RDF")
 public class OccurencesToRdf implements Callable<Integer> {
 
+	private static final String DEV_STDOUT = "/dev/stdout";
+
 	private static final byte[] PREFIXES = """
 			PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 			PREFIX gbifocc: <https://www.gbif.org/occurrence/>
 			PREFIX ogc: <http://www.opengis.net/rdf#>
 			PREFIX gbifterm: <http://rs.gbif.org/terms/1.0/>
 			PREFIX gbifds: <https://www.gbif.org/dataset/>
-			PREFIX gbifsp: <https://www.gbif.org/species/>
 			PREFIX gbifpub: <https://www.gbif.org/publisher/>
 			PREFIX dwc: <http://rs.tdwg.org/dwc/terms/>
 			PREFIX dwciri:<http://rs.tdwg.org/dwc/iri/>
@@ -53,7 +54,13 @@ public class OccurencesToRdf implements Callable<Integer> {
 			PREFIX cc0: <https://creativecommons.org/publicdomain/zero/1.0/>
 			PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 			PREFIX osmrel: <https://www.openstreetmap.org/relation/>
-				""".getBytes(UTF_8);
+			""".getBytes(UTF_8);
+
+	/**
+	 * Use tid: as a prefix which might be a taxon ID from the GBIF backbone or Catalogue of Life depending on the year/month of the data.
+	 */
+	private static final byte[] GBIFSP_BACKBONE = "PREFIX tid: <https://www.gbif.org/species/>".getBytes(UTF_8);
+	private static final byte[] GBIFSP_COL = "PREFIX tid: <https://www.catalogueoflife.org/data/taxon/>".getBytes(UTF_8);
 
 	private static final System.Logger log = System.getLogger(OccurencesToRdf.class.getName());
 
@@ -64,7 +71,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 	public String month;
 
 	@Option(names = { "--output", "-o" }, description = "Where to write to")
-	public File output = new File("/dev/stdout");
+	public File output = new File(DEV_STDOUT);
 
 	@Option(names = { "--s3secret" }, description = "S3 Secret for the User that has access to the files/bucket")
 	public String s3secret;
@@ -74,6 +81,8 @@ public class OccurencesToRdf implements Callable<Integer> {
 
 	@Option(names = { "-d", "--aws" }, description = "Retrieve read parquet files from AWS S3", defaultValue = "false")
 	public boolean useS3 = false;
+
+	private boolean useCatalogueOfLife;
 
 	public static void main(String[] args) {
 		int exitCode = new CommandLine(new OccurencesToRdf()).execute(args);
@@ -90,6 +99,9 @@ public class OccurencesToRdf implements Callable<Integer> {
 			log.log(Level.ERROR, "Month value is missing or invalid");
 			return 1;
 		}
+		if (((Integer.parseInt(year) == 2026) && (Integer.parseInt(month) > 7)) || Integer.parseInt(year) > 2026) {
+			useCatalogueOfLife = true;
+		}
 		if (useS3) {
 			AwsOpenDataLocations closestS3Location = AwsOpenDataLocations.findClosestS3Location();
 			log.log(Level.INFO, "Closest S3 location: " + closestS3Location.getLocation());
@@ -99,13 +111,13 @@ public class OccurencesToRdf implements Callable<Integer> {
 			log.log(Level.INFO, "Would parse " + files.size() + " files");
 			try (Stream<Path> list = closestS3Location.download(files, year, month)) {
 				return convertFiles(list);
-			} catch (IOException e) {
+			} catch (IOException _) {
 				return 1;
 			}
 		} else {
 			try (Stream<Path> list = Files.list(Path.of("./" + year + "/" + month))) {
 				return convertFiles(list);
-			} catch (IOException e) {
+			} catch (IOException _) {
 				return 1;
 			}
 		}
@@ -116,7 +128,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 			printPrefixes(fos);
 
 			Instant start = Instant.now();
-			OfInt iter = list.mapToInt((f) -> convertFile(f, start, fos)).iterator();
+			OfInt iter = list.mapToInt(f -> convertFile(f, start, fos)).iterator();
 			while (iter.hasNext()) {
 				int result = iter.nextInt();
 				if (result != 0) {
@@ -124,12 +136,12 @@ public class OccurencesToRdf implements Callable<Integer> {
 				}
 			}
 			return 0;
-		} catch (IOException e) {
+		} catch (IOException _) {
 			return 1;
 		}
 	}
 
-	 int convertFile(Path path1, Instant start, OutputStream fos) {
+	int convertFile(Path path1, Instant start, OutputStream fos) {
 		Map<KnownColumns, Integer> knownColumnsMap = new EnumMap<>(KnownColumns.class);
 		try {
 			while (Files.isSymbolicLink(path1)) {
@@ -150,7 +162,8 @@ public class OccurencesToRdf implements Callable<Integer> {
 					.build()) {
 				boolean gbifid = schema.getColumn(KnownColumns.gbifid.columnName()).type() == PhysicalType.INT64;
 				boolean taxonIsInt = schema.getColumn(KnownColumns.taxonkey.columnName()).type() == PhysicalType.INT32;
-				boolean dateIsInUtC = schema.getColumn(KnownColumns.eventdate.columnName()).logicalType() instanceof TimestampType tt && tt.isAdjustedToUTC();
+				boolean dateIsInUtC = schema.getColumn(KnownColumns.eventdate.columnName())
+						.logicalType() instanceof TimestampType tt && tt.isAdjustedToUTC();
 				var toTtl = new RowToTurtle(knownColumnsMap);
 				toTtl.convertRows(rows, fos, taxonIsInt, gbifid, dateIsInUtC);
 			}
@@ -169,12 +182,16 @@ public class OccurencesToRdf implements Callable<Integer> {
 		Instant end = Instant.now();
 		Duration forFile = Duration.between(startFile, end);
 		Duration forAll = Duration.between(start, end);
-		System.err.println("Converted " + path1 + " in " + forFile + " total " + forAll);
+		log.log(Level.INFO, "Converted " + path1 + " in " + forFile + " total " + forAll);
 	}
 
 	private void printPrefixes(OutputStream os) throws IOException {
-
 		os.write(PREFIXES);
+		if (useCatalogueOfLife) {
+			os.write(GBIFSP_COL);
+		} else {
+			os.write(GBIFSP_BACKBONE);
+		}
 	}
 
 	private void mapKnownColumnsToIds(Map<KnownColumns, Integer> knownColumnsMap, FileSchema schema) {
