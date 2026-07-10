@@ -151,7 +151,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 				boolean gbifid = schema.getColumn(KnownColumns.gbifid.columnName()).type() == PhysicalType.INT64;
 				boolean taxonIsInt = schema.getColumn(KnownColumns.taxonkey.columnName()).type() == PhysicalType.INT32;
 				boolean dateIsInUtC = schema.getColumn(KnownColumns.eventdate.columnName()).logicalType() instanceof TimestampType tt && tt.isAdjustedToUTC();
-				var toTtl = new RowToTurtle(rows, knownColumnsMap);
+				var toTtl = new RowToTurtle(knownColumnsMap);
 				toTtl.convertRows(rows, fos, taxonIsInt, gbifid, dateIsInUtC);
 			}
 			logTime(path1, start, startFile);

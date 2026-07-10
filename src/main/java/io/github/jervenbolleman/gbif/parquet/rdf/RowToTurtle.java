@@ -26,6 +26,14 @@ import dev.hardwood.reader.RowReader;
 import dev.hardwood.row.PqList;
 import dev.hardwood.row.StructAccessor;
 
+/**
+ * Converts a row of GBIF occurrence data to RDF Turtle format. This is a very
+ * "binary" implementation, using byte arrays and buffers to minimize memory
+ * allocations and improve performance. It assumes that the gbif data if
+ * relatively well behaved, and does not do a lot of error checking. It will
+ * throw some exceptions if the data is not as expected, but it might also
+ * generate invalid RDF if the data is not as expected.
+ */
 public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int individualCountColId,
 		int publishingorgkeyColId, int countryCodeColId, int decimallatitudeColId, int decimalLongitudeColId,
 		int coordinateUncertaintyInMetersColId, int elevationColId, int elevationAccuracyColId, int depthColId,
@@ -117,7 +125,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] CC0_1_0 = "cc0: ".getBytes(UTF_8);
 	private static final int BUFFER_SIZE = 16 * 8096;
 
-	public RowToTurtle(RowReader rows, Map<KnownColumns, Integer> knownColumnsMap) {
+	public RowToTurtle(Map<KnownColumns, Integer> knownColumnsMap) {
 		this(getColumnId(knownColumnsMap, KnownColumns.gbifid),
 				getColumnId(knownColumnsMap, KnownColumns.occurrencestatus),
 				getColumnId(knownColumnsMap, KnownColumns.individualcount),
@@ -167,16 +175,16 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		Digester digester = new Digester();
 		BiFunction<StructAccessor, Integer, byte[]> dt;
 		if (dateIsInUtC) {
-			dt = (s, colid) -> fromTimestampToXsdDate(s, colid);
+			dt = RowToTurtle::fromTimestampToXsdDate;
 		} else {
-			dt = (s, colid) -> fromLocalToXsdDate(s, colid);
+			dt = RowToTurtle::fromLocalToXsdDate;
 		}
 		while (rows.hasNext()) {
 			rows.next();
 
 			byte[] gbifid = getGBIFid(rows, gbifidIsLong);
 
-			bufferUse = addGbifId(rows, fos, buffer, bufferUse, gbifid);
+			bufferUse = addGbifId(fos, buffer, bufferUse, gbifid);
 
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, occurrenceStatus, occurenceStatusColId, false);
 			bufferUse = addAsInteger(rows, fos, buffer, bufferUse, individualCount, individualCountColId);
@@ -368,14 +376,14 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordnumber, recordnumberColId, true);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, identifiedby, identifiedbyColId, true);
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, dateidentified, dateidentifiedColId, XSD_DATE,
-				(s) -> dt.apply(s, dateidentifiedColId));
+				s -> dt.apply(s, dateidentifiedColId));
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordedby, recordedbyColId, true);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, typestatus, typestatusColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, establishmentmeans, establishmentmeansColId,
 				false);
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, lastinterpreted, lastinterpretedColId, XSD_DATE,
-				(s) -> dt.apply(s, lastinterpretedColId));
+				s -> dt.apply(s, lastinterpretedColId));
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, mediatype, mediatypeColId, false);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, issue, issueColId, true);
 		return bufferUse;
@@ -395,13 +403,13 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private int addDate(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
 			BiFunction<StructAccessor, Integer, byte[]> dt) throws IOException {
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, eventDate, eventdateColId, XSD_DATE,
-				(s) -> dt.apply(s, eventdateColId));
+				s -> dt.apply(s, eventdateColId));
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, day, dayColId, XSD_GDAY,
-				(s) -> intToGday(dayColId, s));
+				s -> intToGday(dayColId, s));
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, month, monthColId, XSD_GMONTH,
-				(s) -> intToGMonth(monthColId, s));
+				s -> intToGMonth(monthColId, s));
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, year, yearColId, XSD_GYEAR,
-				(s) -> Integer.toString(s.getInt(yearColId)).getBytes(UTF_8));
+				s -> Integer.toString(s.getInt(yearColId)).getBytes(UTF_8));
 		return bufferUse;
 	}
 
@@ -592,7 +600,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return bufferUse;
 	}
 
-	private int addGbifId(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid)
+	private int addGbifId(OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid)
 			throws IOException {
 		bufferUse = add(buffer, GBIFOCC_PREFIX, fos, bufferUse);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
