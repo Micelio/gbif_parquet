@@ -1,7 +1,7 @@
 # gbif_parquet to rdf/turtle
 
 
-To convert GBIF occurences into turlte
+To convert GBIF occurences into turtle
 
 ```
 mvn package -Puber
