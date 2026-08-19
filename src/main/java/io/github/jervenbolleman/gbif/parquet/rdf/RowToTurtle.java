@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
@@ -20,7 +21,7 @@ import java.util.function.Function;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Polygon;
 import org.locationtech.jts.util.GeometricShapeFactory;
-import org.roaringbitmap.buffer.MutableRoaringBitmap;
+import org.roaringbitmap.longlong.Roaring64Bitmap;
 
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.row.PqList;
@@ -68,7 +69,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] GBIFSP_PREFIX = "gbifsp:".getBytes(UTF_8);
 	private static final byte[] GBIFTERM_PREFIX = "gbifterm:".getBytes(UTF_8);
 	private static final byte[] OSMREL_PREFIX = "osmrel:".getBytes(UTF_8);
- 	private static final byte[] isOccurrence = (" a dwc:Occurrence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
+	private static final byte[] isOccurrence = (" a dwc:Occurrence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
 	private static final byte[] occurrenceStatus = ("dwc:occurrenceStatus ").getBytes(UTF_8);
 	private static final byte[] individualCount = ("dwc:individualCount ").getBytes(UTF_8);
 	private static final byte[] publishingOrgKey = ("dwc:publishingOrgKey gbifpub:").getBytes(UTF_8);
@@ -166,11 +167,11 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 				getColumnId(knownColumnsMap, KnownColumns.infraspecificepithet));
 	}
 
-	void convertRows(RowReader rows, OutputStream fos, boolean taxonIsInt, boolean gbifidIsLong, boolean dateIsInUtC)
-			throws IOException, NoSuchAlgorithmException {
+	void convertRows(RowReader rows, OutputStream fos, boolean taxonIsInt, boolean gbifidIsLong, boolean dateIsInUtC,
+			boolean colInUse) throws IOException, NoSuchAlgorithmException {
 		byte[] buffer = new byte[BUFFER_SIZE];
 		int bufferUse = 0;
-		MutableRoaringBitmap seenTaxons = new MutableRoaringBitmap();
+		Roaring64Bitmap seenTaxons = new Roaring64Bitmap();
 
 		Digester digester = new Digester();
 		BiFunction<StructAccessor, Integer, byte[]> dt;
@@ -193,7 +194,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = addDate(rows, fos, buffer, bufferUse, dt);
 			bufferUse = andRecordData(rows, fos, buffer, bufferUse, dt);
 			bufferUse = addLicense(rows, fos, buffer, bufferUse);
-			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxonIsInt);
+			bufferUse = addTaxons(rows, fos, buffer, bufferUse, seenTaxons, taxonIsInt, colInUse, gbifid);
 			bufferUse = addLocation(rows, fos, buffer, bufferUse, digester, gbifid);
 		}
 		fos.write(buffer, 0, bufferUse);
@@ -243,7 +244,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 				bufferUse = add(buffer, sfWithin, fos, bufferUse);
 				bufferUse = add(buffer, SPACE, fos, bufferUse);
 				bufferUse = add(buffer, OSMREL_PREFIX, fos, bufferUse);
-				bufferUse = add(buffer, byIso.idBytes(), fos, bufferUse);		
+				bufferUse = add(buffer, byIso.idBytes(), fos, bufferUse);
 			}
 			bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, countryCode, countryCodeColId, true);
 			if (stateProvinceS != null) {
@@ -261,8 +262,8 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return string.replace("\\", "\\\\");
 	}
 
-	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
-			MutableRoaringBitmap seenTaxons, boolean taxonIsInt) throws IOException {
+	private int addTaxons(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Roaring64Bitmap seenTaxons,
+			boolean taxonIsInt, boolean colInUse, byte[] gbifid) throws IOException {
 		String taxon = null;
 		String species = null;
 		if (hasColumn(rows, taxonkeyColId)) {
@@ -286,9 +287,9 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			}
 		}
 		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
-		bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null);
+		bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null, colInUse, gbifid);
 		if (species != null && !species.equals(taxon)) {
-			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon);
+			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon, colInUse, gbifid);
 		}
 		return bufferUse;
 	}
@@ -297,11 +298,26 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return colId > 0 && !rows.isNull(colId);
 	}
 
-	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse,
-			MutableRoaringBitmap seenTaxons, String taxon, String taxa) throws IOException {
+	private int addTaxon(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, Roaring64Bitmap seenTaxons,
+			String taxon, String taxa, boolean colInUse, byte[] gbifid) throws IOException {
 		if (taxon != null) {
-			int taxonInt = Integer.parseInt(taxon);
-			if (seenTaxons.checkedAdd(taxonInt)) {
+			long taxonInt = 0;
+			if (colInUse && "0".equals(taxon)) {
+				System.err.println("invalid taxon in " + new String(gbifid, UTF_8));
+				return 0;
+			} else if (colInUse) {
+				try {
+					taxonInt = decode(taxon);
+				} catch (IllegalArgumentException e) {
+					System.err.println("invalid taxon " + taxon + " in " + new String(gbifid, UTF_8));
+					return 0;
+				}
+			} else {
+				taxonInt = Integer.parseInt(taxon);
+			}
+
+			if (!seenTaxons.contains(taxonInt)) {
+				seenTaxons.add(taxonInt);
 				bufferUse = add(buffer, GBIFSP_PREFIX, fos, bufferUse);
 				bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 				bufferUse = add(buffer, " a dwc:Taxon ".getBytes(), fos, bufferUse);
@@ -600,8 +616,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return bufferUse;
 	}
 
-	private int addGbifId(OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid)
-			throws IOException {
+	private int addGbifId(OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid) throws IOException {
 		bufferUse = add(buffer, GBIFOCC_PREFIX, fos, bufferUse);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
 		bufferUse = add(buffer, isOccurrence, fos, bufferUse);
@@ -649,5 +664,43 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			System.arraycopy(toAdd, 0, buffer, bufferUse, toAdd.length);
 			return nextEnd;
 		}
+	}
+
+	// See https://github.com/CatalogueOfLife/backend/issues/491
+	private static final byte[] ALPHABET = makeAlphabet();
+	private static final int BASE = 29;
+
+	static long decode(String colId) {
+		if (colId == null || colId.isEmpty()) {
+			throw new IllegalArgumentException("ID cannot be null or empty");
+		}
+
+		long result = 0;
+//        String normalizedId = colId.toLowerCase(); // Latin29 is case-insensitive
+
+		for (int i = 0; i < colId.length(); i++) {
+			char c = colId.charAt(i);
+			int charValue = ALPHABET[c];
+
+			if (charValue == -1) {
+				throw new IllegalArgumentException("Invalid Latin29 character: " + c + " from " + colId);
+			}
+
+			// Multiply accumulated value by base (29) and add current character's value
+			result = Math.addExact(Math.multiplyExact(result, (long) BASE), (long) charValue);
+		}
+
+		return result;
+	}
+
+	private static byte[] makeAlphabet() {
+		String alpharaw = "23456789BCDFGHJKLMNPQRSTVWXYZ";
+		byte[] alphabet = new byte[(int) 'z' + 1];
+		Arrays.fill(alphabet, (byte) -1);
+		for (int i = 0; i < alpharaw.length(); i++) {
+			alphabet[alpharaw.charAt(i)] = (byte) i;
+			alphabet[alpharaw.toLowerCase().charAt(i)] = (byte) i;
+		}
+		return alphabet;
 	}
 }
