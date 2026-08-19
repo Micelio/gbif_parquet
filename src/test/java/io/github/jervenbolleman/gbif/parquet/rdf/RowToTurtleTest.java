@@ -17,4 +17,9 @@ class RowToTurtleTest {
 		String escape3 = RowToTurtle.escape("somehwatlonger\\andpost");
 		assertEquals("somehwatlonger\\\\andpost", escape3);
 	}
+	
+	@Test
+	void colDecode() {
+		assertEquals(126860, RowToTurtle.decode("77VJ"));
+	}
 }
