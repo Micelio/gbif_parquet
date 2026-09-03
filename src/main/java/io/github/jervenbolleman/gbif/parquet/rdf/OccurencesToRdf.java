@@ -180,7 +180,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 	private void mapKnownColumnsToIds(Map<KnownColumns, Integer> knownColumnsMap, FileSchema schema) {
 		for (int i = 0; i < schema.getColumnCount(); i++) {
 			ColumnSchema column = schema.getColumn(i);
-			KnownColumns kc = KnownColumns.fromColumnName(column.name());
+			KnownColumns kc = KnownColumns.fromColumnName(column.fieldPath().topLevelName());
 			if (kc != null) {
 				knownColumnsMap.put(kc, i);
 			}

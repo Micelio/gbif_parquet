@@ -378,7 +378,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		bufferUse = addAsDatatypeString(rows, fos, buffer, bufferUse, dateidentified, dateidentifiedColId, XSD_DATE,
 				s -> dt.apply(s, dateidentifiedColId));
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, rightsholder, rightsholderColId, true);
-		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, recordedby, recordedbyColId, true);
+		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, recordedby, recordedbyColId, true);
 		bufferUse = addAsLiteralStrings(rows, fos, buffer, bufferUse, typestatus, typestatusColId, true);
 		bufferUse = addAsLiteralString(rows, fos, buffer, bufferUse, establishmentmeans, establishmentmeansColId,
 				false);
