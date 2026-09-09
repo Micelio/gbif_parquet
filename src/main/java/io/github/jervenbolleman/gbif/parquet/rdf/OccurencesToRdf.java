@@ -54,8 +54,8 @@ public class OccurencesToRdf implements Callable<Integer> {
 			PREFIX osmrel: <https://www.openstreetmap.org/relation/>
 				""".getBytes(UTF_8);
 	
-	private static final byte[] GBIF_SPECIES_PREFIX="PREFIX gbifsp: <https://www.gbif.org/species/>\n".getBytes(UTF_8);
-	private static final byte[] COL_SPECIES_PREFIX="PREFIX gbifsp: <https://www.catalogueoflife.org/data/taxon/>\n".getBytes(UTF_8);
+	private static final byte[] GBIF_SPECIES_PREFIX="PREFIX taxon: <https://www.gbif.org/species/>\n".getBytes(UTF_8);
+	private static final byte[] COL_SPECIES_PREFIX="PREFIX taxon: <https://www.catalogueoflife.org/data/taxon/>\n".getBytes(UTF_8);
 	private static final System.Logger log = System.getLogger(OccurencesToRdf.class.getName());
 
 	@Option(names = { "--year" }, description = "Year", required = true)
@@ -102,7 +102,7 @@ public class OccurencesToRdf implements Callable<Integer> {
 		}
 		if ((monthI > 7 && yearI == 2026) || yearI > 2026) {
 			colTaxa = true;
-			log.log(Level.INFO, "Taxon identifiers are Catalogue of Life nog GBIF backbone");
+			log.log(Level.INFO, "Taxon identifiers are Catalogue of Life not GBIF backbone");
 		}
 		if (useS3) {
 			AwsOpenDataLocations closestS3Location = AwsOpenDataLocations.findClosestS3Location();
@@ -165,13 +165,13 @@ public class OccurencesToRdf implements Callable<Integer> {
 				boolean gbifid = schema.getColumn(KnownColumns.gbifid.columnName()).type() == PhysicalType.INT64;
 				boolean taxonIsInt = schema.getColumn(KnownColumns.taxonkey.columnName()).type() == PhysicalType.INT32 && !colTaxa;
 				boolean dateIsInUtC = schema.getColumn(KnownColumns.eventdate.columnName()).logicalType() instanceof TimestampType tt && tt.isAdjustedToUTC();
-				if (colTaxa)
+				if (colTaxa) {
 					log.log(Level.DEBUG, "Taxa is an String and Catalogue of Life");
-				else if (taxonIsInt)
+				} else if (taxonIsInt) {
 					log.log(Level.DEBUG, "Taxa is an integer");
-				else
+				} else {
 					log.log(Level.DEBUG, "Taxa is an String");
-				
+				}
 				var toTtl = new RowToTurtle(knownColumnsMap);
 				toTtl.convertRows(rows, fos, taxonIsInt, gbifid, dateIsInUtC, colTaxa);
 			}
@@ -196,10 +196,11 @@ public class OccurencesToRdf implements Callable<Integer> {
 	private void printPrefixes(OutputStream os) throws IOException {
 
 		os.write(PREFIXES);
-		if (colTaxa)
+		if (colTaxa) {
 			os.write(COL_SPECIES_PREFIX);
-		else
+		} else {
 			os.write(GBIF_SPECIES_PREFIX);
+		}
 	}
 
 	private void mapKnownColumnsToIds(Map<KnownColumns, Integer> knownColumnsMap, FileSchema schema) {
