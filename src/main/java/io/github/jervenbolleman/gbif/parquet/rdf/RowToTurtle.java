@@ -66,7 +66,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] countryCode = ("dwc:countryCode ").getBytes(UTF_8);
 	private static final byte[] closeDoubleLiteral = "\"^^xsd:double ".getBytes(UTF_8);
 	private static final byte[] GBIFOCC_PREFIX = "gbifocc:".getBytes(UTF_8);
-	private static final byte[] GBIFSP_PREFIX = "gbifsp:".getBytes(UTF_8);
+	private static final byte[] TAXON_PREFIX = "taxon:".getBytes(UTF_8);
 	private static final byte[] GBIFTERM_PREFIX = "gbifterm:".getBytes(UTF_8);
 	private static final byte[] OSMREL_PREFIX = "osmrel:".getBytes(UTF_8);
 	private static final byte[] isOccurrence = (" a dwc:Occurrence " + PRE + "gbifterm:gbifID ").getBytes(UTF_8);
@@ -318,7 +318,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 
 			if (!seenTaxons.contains(taxonInt)) {
 				seenTaxons.add(taxonInt);
-				bufferUse = add(buffer, GBIFSP_PREFIX, fos, bufferUse);
+				bufferUse = add(buffer, TAXON_PREFIX, fos, bufferUse);
 				bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 				bufferUse = add(buffer, " a dwc:Taxon ".getBytes(), fos, bufferUse);
 
@@ -337,7 +337,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 							infraspecificepithetColId, true);
 					bufferUse = add(buffer, PREB, fos, bufferUse);
 					bufferUse = add(buffer, subclassof, fos, bufferUse);
-					bufferUse = add(buffer, GBIFSP_PREFIX, fos, bufferUse);
+					bufferUse = add(buffer, TAXON_PREFIX, fos, bufferUse);
 					bufferUse = add(buffer, taxa.getBytes(UTF_8), fos, bufferUse);
 				}
 				bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
