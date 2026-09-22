@@ -102,7 +102,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 	private static final byte[] lastinterpreted = ("dwc:lastInterpreted ").getBytes(UTF_8);
 	private static final byte[] mediatype = ("dwc:mediaType ").getBytes(UTF_8);
 	private static final byte[] issue = ("dwc:issue ").getBytes(UTF_8);
-	private static final byte[] toTaxon = ("dwciri:toTaxon gbifsp:").getBytes(UTF_8);
+	private static final byte[] toTaxon = ("dwciri:toTaxon taxon:").getBytes(UTF_8);
 	private static final byte[] sfWithin = "geo:sfWithin".getBytes(UTF_8);
 	private static final byte[] kingdom = ("dwc:kingdom ").getBytes(UTF_8);
 	private static final byte[] phylum = ("dwc:phylum ").getBytes(UTF_8);
