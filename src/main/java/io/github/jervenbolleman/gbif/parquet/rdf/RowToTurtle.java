@@ -304,13 +304,13 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			long taxonInt = 0;
 			if (colInUse && "0".equals(taxon)) {
 				System.err.println("invalid taxon in " + new String(gbifid, UTF_8));
-				return 0;
+				return bufferUse;
 			} else if (colInUse) {
 				try {
 					taxonInt = decode(taxon);
 				} catch (IllegalArgumentException e) {
 					System.err.println("invalid taxon " + taxon + " in " + new String(gbifid, UTF_8));
-					return 0;
+					return bufferUse;
 				}
 			} else {
 				taxonInt = Integer.parseInt(taxon);
@@ -616,7 +616,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return bufferUse;
 	}
 
-	private int addGbifId(OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid) throws IOException {
+	private static int addGbifId(OutputStream fos, byte[] buffer, int bufferUse, byte[] gbifid) throws IOException {
 		bufferUse = add(buffer, GBIFOCC_PREFIX, fos, bufferUse);
 		bufferUse = add(buffer, gbifid, fos, bufferUse);
 		bufferUse = add(buffer, isOccurrence, fos, bufferUse);
@@ -703,4 +703,6 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		}
 		return alphabet;
 	}
+
+	
 }
