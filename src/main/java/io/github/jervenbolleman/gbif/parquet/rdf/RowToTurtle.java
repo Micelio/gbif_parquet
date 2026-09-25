@@ -267,31 +267,71 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		String taxon = null;
 		String species = null;
 		if (hasColumn(rows, taxonkeyColId)) {
-			if (taxonIsInt)
-				taxon = Integer.toString(rows.getInt(taxonkeyColId));
-			else
-				taxon = rows.getString(taxonkeyColId);
+			try {
+				taxon = getTaxonString(rows, bufferUse, taxonIsInt, gbifid, taxonkeyColId);
+			} catch (BadTaxaException e) {
+				return bufferUse;
+			}
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, toTaxon, fos, bufferUse);
 			bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
 		}
+		boolean badTaxa = false;
 		if (hasColumn(rows, speciesKeyColId)) {
-			if (taxonIsInt)
-				species = Integer.toString(rows.getInt(speciesKeyColId));
-			else
-				species = rows.getString(speciesKeyColId);
-			if (species != null && !species.equals(taxon)) {
-				bufferUse = add(buffer, PREB, fos, bufferUse);
-				bufferUse = add(buffer, toTaxon, fos, bufferUse);
-				bufferUse = add(buffer, species.getBytes(UTF_8), fos, bufferUse);
+			try {
+				species = getTaxonString(rows, bufferUse, taxonIsInt, gbifid, speciesKeyColId);
+				if (species != null && !species.equals(taxon)) {
+					bufferUse = add(buffer, PREB, fos, bufferUse);
+					bufferUse = add(buffer, toTaxon, fos, bufferUse);
+					bufferUse = add(buffer, species.getBytes(UTF_8), fos, bufferUse);
+				}
+			} catch (BadTaxaException e) {
+				System.err.println("Skipping row with bad taxon: " + e.getMessage());
+				badTaxa=true;
 			}
+
 		}
 		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
-		bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null, colInUse, gbifid);
-		if (species != null && !species.equals(taxon)) {
-			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon, colInUse, gbifid);
+		if (!badTaxa) {
+			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null, colInUse, gbifid);
+			if (species != null && !species.equals(taxon)) {
+				bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon, colInUse, gbifid);
+			}
 		}
 		return bufferUse;
+	}
+
+	/**
+	 * Still allows non LATIN29 identifiers.
+	 * @param rows
+	 * @param bufferUse
+	 * @param taxonIsInt
+	 * @param gbifid
+	 * @param colId
+	 * @return
+	 * @throws BadTaxaException
+	 */
+	private static final String getTaxonString(RowReader rows, int bufferUse, boolean taxonIsInt, byte[] gbifid,
+			int colId) throws BadTaxaException {
+		String taxId;
+		if (taxonIsInt)
+			taxId = Integer.toString(rows.getInt(colId));
+		else
+			taxId = rows.getString(colId);
+		if (taxId.equals("0") || taxId.indexOf('/') >= 0) {
+			throw new BadTaxaException("invalid taxon " + taxId + " in " + new String(gbifid, UTF_8));
+		}
+		return taxId;
+	}
+
+	private static final class BadTaxaException extends Exception {
+
+		private static final long serialVersionUID = 1L;
+
+		public BadTaxaException(String message) {
+			super(message);
+		}
+
 	}
 
 	private static boolean hasColumn(RowReader rows, int colId) {
@@ -303,7 +343,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		if (taxon != null) {
 			long taxonInt = 0;
 			if (colInUse && "0".equals(taxon)) {
-				System.err.println("invalid taxon in " + new String(gbifid, UTF_8));
+				System.err.println("invalid taxon " + taxon + " in " + new String(gbifid, UTF_8));
 				return bufferUse;
 			} else if (colInUse) {
 				try {
@@ -704,5 +744,4 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 		return alphabet;
 	}
 
-	
 }
