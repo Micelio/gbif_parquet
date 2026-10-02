@@ -194,7 +194,12 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			bufferUse = addDate(rows, fos, buffer, bufferUse, dt);
 			bufferUse = andRecordData(rows, fos, buffer, bufferUse, dt);
 			bufferUse = addLicense(rows, fos, buffer, bufferUse);
+			int bufferUseAfterLicense = bufferUse;
 			bufferUse = addTaxons(rows, fos, buffer, bufferUse, seenTaxons, taxonIsInt, colInUse, gbifid);
+			if (bufferUseAfterLicense == bufferUse) {
+				// No taxon was added, so we need to add the END_TRIPLE_BLOCK
+				bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
+			}
 			bufferUse = addLocation(rows, fos, buffer, bufferUse, digester, gbifid);
 		}
 		fos.write(buffer, 0, bufferUse);
@@ -270,13 +275,15 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 			try {
 				taxon = getTaxonString(rows, bufferUse, taxonIsInt, gbifid, taxonkeyColId);
 			} catch (BadTaxaException e) {
+				System.err.println("Skipping row with bad taxon: " + e.getMessage());
 				return bufferUse;
 			}
 			bufferUse = add(buffer, PREB, fos, bufferUse);
 			bufferUse = add(buffer, toTaxon, fos, bufferUse);
 			bufferUse = add(buffer, taxon.getBytes(UTF_8), fos, bufferUse);
+			
 		}
-		boolean badTaxa = false;
+		boolean badSpecies = false;
 		if (hasColumn(rows, speciesKeyColId)) {
 			try {
 				species = getTaxonString(rows, bufferUse, taxonIsInt, gbifid, speciesKeyColId);
@@ -286,17 +293,14 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 					bufferUse = add(buffer, species.getBytes(UTF_8), fos, bufferUse);
 				}
 			} catch (BadTaxaException e) {
-				System.err.println("Skipping row with bad taxon: " + e.getMessage());
-				badTaxa=true;
+				System.err.println("Skipping row with bad species: " + e.getMessage());
+				badSpecies = true;
 			}
-
 		}
 		bufferUse = add(buffer, END_TRIPLE_BLOCK, fos, bufferUse);
-		if (!badTaxa) {
-			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null, colInUse, gbifid);
-			if (species != null && !species.equals(taxon)) {
-				bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon, colInUse, gbifid);
-			}
+		bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, taxon, null, colInUse, gbifid);
+		if (!badSpecies && species != null && !species.equals(taxon)) {
+			bufferUse = addTaxon(rows, fos, buffer, bufferUse, seenTaxons, species, taxon, colInUse, gbifid);
 		}
 		return bufferUse;
 	}
@@ -590,7 +594,7 @@ public record RowToTurtle(int gbifColumnId, int occurenceStatusColId, int indivi
 
 	private static int addAsRawString(RowReader rows, OutputStream fos, byte[] buffer, int bufferUse, byte[] predicate,
 			int colId) throws IOException {
-		if (hasColumn(rows, colId)) {
+		if (! hasColumn(rows, colId)) {
 			return bufferUse;
 		} else {
 			bufferUse = add(buffer, PREB, fos, bufferUse);
